@@ -1,18 +1,72 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useSharedValue, useAnimatedStyle, withSpring, withRepeat, withSequence, withTiming,
+} from 'react-native-reanimated';
 import { Colors, TabBar } from '../../constants/theme';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 function PlusButton() {
   const router = useRouter();
+  const scale = useSharedValue(1);
+  const glow = useSharedValue(0.3);
+
+  // Pulse glow subtil en continu
+  useEffect(() => {
+    glow.value = withRepeat(
+      withSequence(
+        withTiming(0.6, { duration: 1500 }),
+        withTiming(0.3, { duration: 1500 }),
+      ),
+      -1, true
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    shadowOpacity: glow.value,
+  }));
+
+  const handlePress = () => {
+    scale.value = withSequence(
+      withSpring(0.85, { damping: 10 }),
+      withSpring(1.1, { damping: 6 }),
+      withSpring(1, { damping: 8 }),
+    );
+    setTimeout(() => router.push('/log-beer'), 150);
+  };
+
   return (
-    <Pressable
-      onPress={() => router.push('/log-beer')}
-      style={styles.plusButton}
-    >
-      <Ionicons name="add" size={28} color="#FFFFFF" />
-    </Pressable>
+    <AnimatedPressable onPress={handlePress} style={[styles.plusButton, animStyle]}>
+      <Ionicons name="add" size={30} color="#FFFFFF" />
+    </AnimatedPressable>
+  );
+}
+
+// Icône tab animée
+function TabIcon({ name, color, size, focused }: { name: string; color: string; size: number; focused: boolean }) {
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    if (focused) {
+      scale.value = withSequence(
+        withSpring(1.2, { damping: 8 }),
+        withSpring(1, { damping: 10 }),
+      );
+    }
+  }, [focused]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={animStyle}>
+      <Ionicons name={name as any} size={size} color={color} />
+    </Animated.View>
   );
 }
 
@@ -31,8 +85,8 @@ export default function TabsLayout() {
         name="feed"
         options={{
           title: 'Feed',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="home" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -40,8 +94,8 @@ export default function TabsLayout() {
         name="stats"
         options={{
           title: 'Stats',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="stats-chart" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="stats-chart" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -49,8 +103,8 @@ export default function TabsLayout() {
         name="map"
         options={{
           title: 'Map',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="map" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="map" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -60,18 +114,14 @@ export default function TabsLayout() {
           title: '',
           tabBarButton: () => <PlusButton />,
         }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-          },
-        }}
+        listeners={{ tabPress: (e) => e.preventDefault() }}
       />
       <Tabs.Screen
         name="top"
         options={{
           title: 'Top',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="trophy" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="trophy" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -79,8 +129,8 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profil',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="person" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -91,9 +141,9 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     height: TabBar.height,
-    backgroundColor: TabBar.background,
+    backgroundColor: '#0D0D0D',
     borderTopWidth: 1,
-    borderTopColor: TabBar.borderTop,
+    borderTopColor: '#1A1A1A',
     paddingBottom: 6,
     paddingTop: 6,
   },
@@ -102,17 +152,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   plusButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: TabBar.plusElevation,
+    marginTop: -20,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowRadius: 12,
+    elevation: 10,
   },
 });

@@ -10,12 +10,9 @@ export default function RootLayout() {
   const initialize = useAuthStore((s) => s.initialize);
   const isLoading = useAuthStore((s) => s.isLoading);
 
-  // Initialiser l'auth au démarrage
-  useEffect(() => {
-    initialize();
-  }, []);
+  useEffect(() => { initialize(); }, []);
 
-  // Fix Bug 2: Force dark background on web
+  // Force dark bg on web
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.documentElement.style.backgroundColor = '#0D0D0D';
@@ -26,7 +23,6 @@ export default function RootLayout() {
         root.style.backgroundColor = '#0D0D0D';
         root.style.minHeight = '100vh';
       }
-      // Also fix any wrapper divs
       const allDivs = document.querySelectorAll('#root > div');
       allDivs.forEach((div) => {
         (div as HTMLElement).style.backgroundColor = '#0D0D0D';
@@ -50,29 +46,45 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: Colors.background },
-          animation: 'fade',
+          animation: 'fade_from_bottom',
+          animationDuration: 250,
         }}
       >
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
         <Stack.Screen
           name="log-beer"
           options={{
-            presentation: 'modal',
+            presentation: 'transparentModal',
             animation: 'slide_from_bottom',
+            animationDuration: 300,
           }}
         />
-        <Stack.Screen name="phone" />
-        <Stack.Screen name="onboarding" />
+        <Stack.Screen
+          name="phone"
+          options={{ animation: 'fade', animationDuration: 400 }}
+        />
+        <Stack.Screen
+          name="onboarding"
+          options={{ animation: 'fade', animationDuration: 500 }}
+        />
         <Stack.Screen
           name="wrapped"
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+          options={{
+            presentation: 'transparentModal',
+            animation: 'slide_from_bottom',
+            animationDuration: 300,
+          }}
         />
-        <Stack.Screen name="settings" />
+        <Stack.Screen
+          name="settings"
+          options={{ animation: 'slide_from_right', animationDuration: 250 }}
+        />
         <Stack.Screen
           name="friends"
           options={{
-            presentation: 'modal',
+            presentation: 'transparentModal',
             animation: 'slide_from_bottom',
+            animationDuration: 300,
           }}
         />
       </Stack>
@@ -81,12 +93,6 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  loading: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  root: { flex: 1, backgroundColor: Colors.background },
+  loading: { alignItems: 'center', justifyContent: 'center' },
 });
