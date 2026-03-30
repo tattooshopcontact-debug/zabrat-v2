@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Image, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -9,15 +9,31 @@ import { MOCK_BADGES, LEVEL_INFO } from '../../constants/mockData';
 import { Avatar } from '../../components/Avatar';
 import { BADGE_IMAGES, LEVEL_IMAGES } from '../../constants/badgeImages';
 import { uploadAvatar } from '../../lib/storageService';
+import { getUserBadges, type BadgeData } from '../../lib/badgeService';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const level = LEVEL_INFO[user?.level ?? 1];
-  const unlockedCount = MOCK_BADGES.filter((b) => b.unlocked).length;
   const pct = user
     ? Math.min(((user.total_beers - level.min) / (level.max - level.min + 1)) * 100, 100)
     : 0;
+
+  const [badges, setBadges] = useState<BadgeData[]>([]);
+  const [badgesLoaded, setBadgesLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    getUserBadges(user.id).then(data => {
+      if (data.length > 0) { setBadges(data); setBadgesLoaded(true); }
+    }).catch(() => {});
+  }, [user]);
+
+  const displayBadges = badgesLoaded ? badges : MOCK_BADGES.map(b => ({
+    id: b.id, name: b.name, description: '', icon: b.emoji,
+    category: b.category, rarity: 'common', unlocked: b.unlocked,
+  }));
+  const unlockedCount = displayBadges.filter(b => b.unlocked).length;
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
@@ -106,11 +122,11 @@ export default function ProfileScreen() {
           <View style={s.sectionHeader}>
             <Text style={s.sectionTitle}>🏅 Mes Badges</Text>
             <View style={s.badgeCountBadge}>
-              <Text style={s.badgeCountText}>{unlockedCount}/{MOCK_BADGES.length}</Text>
+              <Text style={s.badgeCountText}>{unlockedCount}/{displayBadges.length}</Text>
             </View>
           </View>
           <View style={s.badgeGrid}>
-            {MOCK_BADGES.map((badge) => {
+            {displayBadges.map((badge) => {
               const badgeImage = badge.unlocked ? BADGE_IMAGES[badge.name] : null;
               return (
                 <View key={badge.id} style={[s.badgeSlot, badge.unlocked && s.badgeUnlocked, !badge.unlocked && s.badgeLocked]}>
@@ -118,7 +134,7 @@ export default function ProfileScreen() {
                     <Image source={badgeImage} style={s.badgeImage} resizeMode="contain" />
                   ) : (
                     <Text style={[s.badgeEmoji, !badge.unlocked && { opacity: 0.3 }]}>
-                      {badge.unlocked ? badge.emoji : '🔒'}
+                      {badge.unlocked ? (badge as any).emoji ?? badge.icon : '🔒'}
                     </Text>
                   )}
                   <Text style={[s.badgeName, !badge.unlocked && { opacity: 0.3 }]} numberOfLines={1}>
