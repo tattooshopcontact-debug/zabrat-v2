@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { MOCK_BADGES, LEVEL_INFO } from '../../constants/mockData';
 import { Avatar } from '../../components/Avatar';
 import { BADGE_IMAGES, LEVEL_IMAGES } from '../../constants/badgeImages';
+import { uploadAvatar } from '../../lib/storageService';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -32,9 +33,31 @@ export default function ProfileScreen() {
 
         {/* Avatar + name */}
         <View style={s.profileCard}>
-          <View style={s.avatarGlow}>
-            <Avatar initials="FA" color={Colors.primary} size={72} />
-          </View>
+          <Pressable style={s.avatarGlow} onPress={async () => {
+            if (Platform.OS === 'web') {
+              // Web: file input
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'image/*';
+              input.onchange = async (e: any) => {
+                const file = e.target.files?.[0];
+                if (file && user) {
+                  const url = URL.createObjectURL(file);
+                  await uploadAvatar(user.id, url);
+                }
+              };
+              input.click();
+            }
+          }}>
+            {user?.avatar_url ? (
+              <Image source={{ uri: user.avatar_url }} style={s.avatarImage} />
+            ) : (
+              <Avatar initials="FA" color={Colors.primary} size={72} />
+            )}
+            <View style={s.avatarEditBadge}>
+              <Ionicons name="camera" size={12} color="#FFF" />
+            </View>
+          </Pressable>
           <Text style={s.name}>{user?.display_name ?? 'User'}</Text>
           <Text style={s.username}>@{user?.username ?? 'user'}</Text>
 
@@ -156,7 +179,16 @@ const s = StyleSheet.create({
     borderWidth: 2, borderColor: 'rgba(245,166,35,0.4)',
     shadowColor: '#F5A623', shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3, shadowRadius: 16,
-    marginBottom: 12,
+    marginBottom: 12, position: 'relative',
+  },
+  avatarImage: {
+    width: 72, height: 72, borderRadius: 36,
+  },
+  avatarEditBadge: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: '#0D0D0D',
   },
   name: { fontSize: 24, fontWeight: '800', color: Colors.text },
   username: { fontSize: 13, color: Colors.textMuted, marginTop: 2 },
