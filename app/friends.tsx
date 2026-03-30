@@ -8,7 +8,9 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Fonts } from '../constants/theme';
 import { Avatar } from '../components/Avatar';
+import { AnimatedCard } from '../components/AnimatedCard';
 import { useAuthStore } from '../stores/authStore';
+import { inviteViaWhatsApp } from '../lib/shareService';
 import {
   searchByPhone, searchByUsername, sendFriendRequest,
   getFriends, getPendingRequests, acceptFriendRequest,
@@ -155,10 +157,15 @@ export default function FriendsScreen() {
                 <Pressable style={styles.emptyBtn} onPress={() => setTab('search')}>
                   <Text style={styles.emptyBtnText}>Ajouter des amis</Text>
                 </Pressable>
+                <Pressable style={styles.whatsappBtn} onPress={() => inviteViaWhatsApp()}>
+                  <Ionicons name="logo-whatsapp" size={16} color="#FFF" />
+                  <Text style={styles.whatsappBtnText}>Inviter via WhatsApp</Text>
+                </Pressable>
               </View>
             )}
-            {friends.map((f) => (
-              <View key={f.id} style={styles.friendRow}>
+            {friends.map((f, idx) => (
+              <AnimatedCard key={f.id} index={idx}>
+                <View style={styles.friendRow}>
                 <Avatar initials={initials(f.display_name)} color={Colors.primary} size={42} />
                 <View style={styles.friendInfo}>
                   <Text style={styles.friendName}>{f.display_name}</Text>
@@ -169,6 +176,7 @@ export default function FriendsScreen() {
                   <Text style={styles.friendLevel}>Niv. {f.level}</Text>
                 </View>
               </View>
+              </AnimatedCard>
             ))}
           </>
         )}
@@ -322,6 +330,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginTop: 12,
   },
+  whatsappBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#25D366', borderRadius: 10,
+    paddingHorizontal: 16, paddingVertical: 10, marginTop: 10,
+  },
+  whatsappBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
   emptyBtnText: {
     color: '#000',
     fontWeight: '700',

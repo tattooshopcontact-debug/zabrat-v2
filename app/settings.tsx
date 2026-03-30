@@ -127,9 +127,8 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.surface, borderRadius: 12,
+    backgroundColor: '#1A1A1A', borderRadius: 14,
     padding: 14, marginBottom: 6, gap: 10,
-    borderWidth: 1, borderColor: Colors.border,
   },
   rowIcon: { fontSize: 16, width: 24, textAlign: 'center' },
   rowLabel: { ...Fonts.body, flex: 1 },
