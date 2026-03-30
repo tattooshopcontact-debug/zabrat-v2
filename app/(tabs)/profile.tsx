@@ -9,6 +9,7 @@ import { MOCK_BADGES, LEVEL_INFO } from '../../constants/mockData';
 import { Avatar } from '../../components/Avatar';
 import { BADGE_IMAGES, LEVEL_IMAGES } from '../../constants/badgeImages';
 import { uploadAvatar } from '../../lib/storageService';
+import { AnimatedBadge } from '../../components/AnimatedCard';
 import { getUserBadges, type BadgeData } from '../../lib/badgeService';
 
 export default function ProfileScreen() {
@@ -126,21 +127,23 @@ export default function ProfileScreen() {
             </View>
           </View>
           <View style={s.badgeGrid}>
-            {displayBadges.map((badge) => {
+            {displayBadges.map((badge, idx) => {
               const badgeImage = badge.unlocked ? BADGE_IMAGES[badge.name] : null;
               return (
-                <View key={badge.id} style={[s.badgeSlot, badge.unlocked && s.badgeUnlocked, !badge.unlocked && s.badgeLocked]}>
-                  {badgeImage ? (
-                    <Image source={badgeImage} style={s.badgeImage} resizeMode="contain" />
-                  ) : (
-                    <Text style={[s.badgeEmoji, !badge.unlocked && { opacity: 0.3 }]}>
-                      {badge.unlocked ? (badge as any).emoji ?? badge.icon : '🔒'}
+                <AnimatedBadge key={badge.id} index={idx}>
+                  <View style={[s.badgeSlot, badge.unlocked && s.badgeUnlocked, !badge.unlocked && s.badgeLocked]}>
+                    {badgeImage ? (
+                      <Image source={badgeImage} style={s.badgeImage} resizeMode="contain" />
+                    ) : (
+                      <Text style={[s.badgeEmoji, !badge.unlocked && { opacity: 0.3 }]}>
+                        {badge.unlocked ? (badge as any).emoji ?? badge.icon : '🔒'}
+                      </Text>
+                    )}
+                    <Text style={[s.badgeName, !badge.unlocked && { opacity: 0.3 }]} numberOfLines={1}>
+                      {badge.name}
                     </Text>
-                  )}
-                  <Text style={[s.badgeName, !badge.unlocked && { opacity: 0.3 }]} numberOfLines={1}>
-                    {badge.name}
-                  </Text>
-                </View>
+                  </View>
+                </AnimatedBadge>
               );
             })}
           </View>

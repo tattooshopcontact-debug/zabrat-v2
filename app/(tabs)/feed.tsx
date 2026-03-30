@@ -11,6 +11,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { fetchFeed, subscribeToFeed, type FeedItem } from '../../lib/feedService';
 import { getFriendIds } from '../../lib/friendsService';
 import { EMPTY_IMAGES } from '../../constants/badgeImages';
+import { AnimatedCard } from '../../components/AnimatedCard';
 
 // Couleurs STRICTES du Notion
 const BG = '#0D0D0D';
@@ -155,18 +156,24 @@ export default function FeedScreen() {
 
         <Text style={s.sectionLabel}>FEED AMIS</Text>
 
-        {/* Real feed */}
-        {hasReal && realFeed.map(item => (
-          item.type === 'beer_log'
-            ? <BeerCard key={item.id} name={item.display_name} initials={item.initials} color={item.color} time={item.time_ago} beerType={item.beer_type} beerBrand={item.beer_brand} barName={item.bar_name} />
-            : <BadgeCard key={item.id} name={item.display_name} initials={item.initials} color={item.color} time={item.time_ago} badgeName={item.badge_name} badgeEmoji={item.badge_emoji} badgeDesc={item.badge_description} />
+        {/* Real feed — avec animation d'entrée */}
+        {hasReal && realFeed.map((item, idx) => (
+          <AnimatedCard key={item.id} index={idx}>
+            {item.type === 'beer_log'
+              ? <BeerCard name={item.display_name} initials={item.initials} color={item.color} time={item.time_ago} beerType={item.beer_type} beerBrand={item.beer_brand} barName={item.bar_name} />
+              : <BadgeCard name={item.display_name} initials={item.initials} color={item.color} time={item.time_ago} badgeName={item.badge_name} badgeEmoji={item.badge_emoji} badgeDesc={item.badge_description} />
+            }
+          </AnimatedCard>
         ))}
 
-        {/* Mock feed */}
-        {!hasReal && MOCK_FEED_ITEMS.map(item => (
-          item.type === 'beer_log'
-            ? <BeerCard key={item.id} name={item.user.display_name} initials={item.user.initials} color={item.user.color} time={item.time} beerType={item.beer_type} beerBrand={item.beer_brand} barName={item.bar_name} reactions={item.reactions} />
-            : <BadgeCard key={item.id} name={item.user.display_name} initials={item.user.initials} color={item.user.color} time={item.time} badgeName={item.badge_name} badgeEmoji={item.badge_emoji} badgeDesc={item.badge_description} reactions={item.reactions} />
+        {/* Mock feed — avec animation d'entrée */}
+        {!hasReal && MOCK_FEED_ITEMS.map((item, idx) => (
+          <AnimatedCard key={item.id} index={idx}>
+            {item.type === 'beer_log'
+              ? <BeerCard name={item.user.display_name} initials={item.user.initials} color={item.user.color} time={item.time} beerType={item.beer_type} beerBrand={item.beer_brand} barName={item.bar_name} reactions={item.reactions} />
+              : <BadgeCard name={item.user.display_name} initials={item.user.initials} color={item.user.color} time={item.time} badgeName={item.badge_name} badgeEmoji={item.badge_emoji} badgeDesc={item.badge_description} reactions={item.reactions} />
+            }
+          </AnimatedCard>
         ))}
 
         {/* Empty state */}
