@@ -8,28 +8,36 @@
     "userInterfaceStyle": "dark",
     "scheme": "zabrat",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/images/splash-mobile.png",
       "resizeMode": "contain",
       "backgroundColor": "#0D0D0D"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.zabrat.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.zabrat.app",
       "adaptiveIcon": {
         "backgroundColor": "#0D0D0D",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/android-foreground.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png",
+      "favicon": "./assets/images/favicon-new.png",
       "bundler": "metro",
       "output": "single",
       "backgroundColor": "#0D0D0D"
     },
-    "plugins": ["expo-router"]
+    "plugins": ["expo-router"],
+    "extra": {
+      "eas": {
+        "projectId": "zabrat-v2"
+      }
+    }
   }
 }
