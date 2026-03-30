@@ -95,7 +95,7 @@ export default function OnboardingScreen() {
       >
         {/* Step 1: Splash — avec image générée */}
         <View style={styles.page}>
-          <Image source={require('../assets/images/app-icon.png')} style={styles.splashImage} resizeMode="contain" />
+          <Image source={require('../assets/images/logo.jpg')} style={styles.splashImage} resizeMode="contain" />
           <Text style={styles.splashTitle}>Zabrat</Text>
           <Text style={styles.splashTagline}>Track. Share. Compete.</Text>
           <View style={styles.splashFeatures}>

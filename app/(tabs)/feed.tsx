@@ -12,6 +12,7 @@ import { fetchFeed, subscribeToFeed, type FeedItem } from '../../lib/feedService
 import { getFriendIds } from '../../lib/friendsService';
 import { EMPTY_IMAGES } from '../../constants/badgeImages';
 import { AnimatedCard } from '../../components/AnimatedCard';
+import { ZabratIcon } from '../../components/ZabratLogo';
 
 // Couleurs STRICTES du Notion
 const BG = '#0D0D0D';
@@ -134,7 +135,10 @@ export default function FeedScreen() {
     <SafeAreaView style={s.container} edges={['top']}>
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.headerTitle}>🍺 Zabrat</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <ZabratIcon size={28} />
+          <Text style={s.headerTitle}>Zabrat</Text>
+        </View>
         <View style={s.headerRight}>
           <Pressable style={s.headerBtn} onPress={() => {}}>
             <Ionicons name="notifications-outline" size={20} color={WHITE} />

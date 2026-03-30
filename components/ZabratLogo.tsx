@@ -6,59 +6,23 @@ interface LogoProps {
   showText?: boolean;
 }
 
-// Essaie de charger le logo PNG. Si pas trouvé, affiche le fallback emoji.
-let logoSource: any = null;
-try {
-  logoSource = require('../assets/images/logo.png');
-} catch {
-  logoSource = null;
-}
+const logoSource = require('../assets/images/logo.jpg');
+const iconSource = require('../assets/images/logo-icon.jpg');
 
-let iconSource: any = null;
-try {
-  iconSource = require('../assets/images/app-icon.png');
-} catch {
-  iconSource = null;
-}
-
-export function ZabratLogo({ size = 32, showText = true }: LogoProps) {
+export function ZabratLogo({ size = 32, showText = false }: LogoProps) {
   return (
-    <View style={styles.row}>
-      {logoSource ? (
-        <Image source={logoSource} style={{ width: size, height: size }} resizeMode="contain" />
-      ) : (
-        <Text style={{ fontSize: size * 0.8 }}>🍺</Text>
-      )}
-      {showText && <Text style={[styles.text, { fontSize: size * 0.75 }]}>Zabrat</Text>}
-    </View>
+    <Image source={logoSource} style={{ width: size * 3, height: size }} resizeMode="contain" />
+  );
+}
+
+export function ZabratIcon({ size = 32 }: { size?: number }) {
+  return (
+    <Image source={logoSource} style={{ width: size, height: size }} resizeMode="contain" />
   );
 }
 
 export function ZabratAppIcon({ size = 80 }: { size?: number }) {
-  if (iconSource) {
-    return <Image source={iconSource} style={{ width: size, height: size, borderRadius: size * 0.22 }} resizeMode="cover" />;
-  }
   return (
-    <View style={[styles.iconFallback, { width: size, height: size, borderRadius: size * 0.22 }]}>
-      <Text style={{ fontSize: size * 0.5 }}>🍺</Text>
-    </View>
+    <Image source={iconSource} style={{ width: size, height: size * 0.55, borderRadius: 8 }} resizeMode="contain" />
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  text: {
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-  },
-  iconFallback: {
-    backgroundColor: '#F5A623',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
