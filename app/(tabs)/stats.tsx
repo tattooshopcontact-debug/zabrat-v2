@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../stores/authStore';
 import { MOCK_STREAK_DAYS, MOCK_FAVORITE_BARS, LEVEL_INFO } from '../../constants/mockData';
 import { LEVEL_IMAGES } from '../../constants/badgeImages';
+import { AnimatedCard } from '../../components/AnimatedCard';
 import { getUserStats, type UserStats } from '../../lib/statsService';
 
 const BG = '#0D0D0D';
@@ -58,11 +59,13 @@ export default function StatsScreen() {
             { v: thisMonth, l: 'Ce mois', big: false },
             { v: total, l: 'Total', big: true },
           ].map((st, i) => (
-            <View key={i} style={[s.statCard, st.big && s.statCardBig]}>
-              <Text style={[s.statValue, st.big && s.statValueBig]}>{st.v}</Text>
-              <Text style={s.statEmoji}>🍺</Text>
-              <Text style={s.statLabel}>{st.l}</Text>
-            </View>
+            <AnimatedCard key={i} index={i}>
+              <View style={[s.statCard, st.big && s.statCardBig]}>
+                <Text style={[s.statValue, st.big && s.statValueBig]}>{st.v}</Text>
+                <Text style={s.statEmoji}>🍺</Text>
+                <Text style={s.statLabel}>{st.l}</Text>
+              </View>
+            </AnimatedCard>
           ))}
         </View>
 

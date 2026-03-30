@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '../../components/Avatar';
 import { useAuthStore } from '../../stores/authStore';
 import { MOCK_LEADERBOARD } from '../../constants/mockData';
+import { AnimatedCard } from '../../components/AnimatedCard';
 import { getLeaderboard, getTimeUntilReset, type LeaderboardRow } from '../../lib/leaderboardService';
 
 const BG = '#0D0D0D';
@@ -78,20 +79,21 @@ export default function TopScreen() {
         {data.map((row, i) => {
           const trend = trendIcon(i);
           return (
-            <View key={row.user_id} style={[s.row, row.isMe && s.rowMe]}>
-              <Text style={s.rowMedal}>{MEDALS[row.rank] ?? `${row.rank}.`}</Text>
-              <Avatar initials={row.initials} color={row.color} size={40} />
-              <View style={{ flex: 1 }}>
-                <Text style={[s.rowName, row.isMe && s.rowNameMe]}>
-                  {row.isMe ? `Toi 🔵` : row.display_name}
+            <AnimatedCard key={row.user_id} index={i}>
+              <View style={[s.row, row.isMe && s.rowMe]}>
+                <Text style={s.rowMedal}>{MEDALS[row.rank] ?? `${row.rank}.`}</Text>
+                <Avatar initials={row.initials} color={row.color} size={40} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.rowName, row.isMe && s.rowNameMe]}>
+                    {row.isMe ? `Toi 🔵` : row.display_name}
+                  </Text>
+                </View>
+                <Text style={[s.rowPoints, row.isMe && { color: AMBER }]}>
+                  {hasReal ? `${row.points} pts` : `${row.points} 🍺`}
                 </Text>
+                <Text style={[s.rowTrend, { color: trend.color }]}>{trend.icon}</Text>
               </View>
-              <Text style={[s.rowPoints, row.isMe && { color: AMBER }]}>
-                {hasReal ? `${row.points} pts` : `${row.points} 🍺`}
-              </Text>
-              {/* Flèche tendance — EXACT Notion : ↑ vert, ↓ rouge, → gris */}
-              <Text style={[s.rowTrend, { color: trend.color }]}>{trend.icon}</Text>
-            </View>
+            </AnimatedCard>
           );
         })}
 
