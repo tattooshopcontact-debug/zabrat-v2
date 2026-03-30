@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const API_KEY = 'AIzaSyA3JRGwwTAoDXbHNFLJC-I2-2DBQhoMxRE';
+const API_KEY = process.env.GEMINI_API_KEY;
+if (!API_KEY) { console.error('❌ GEMINI_API_KEY manquant. Ajoute-le dans .env'); process.exit(1); }
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${API_KEY}`;
 
 const ASSETS_DIR = path.join(__dirname, '..', 'assets', 'images');

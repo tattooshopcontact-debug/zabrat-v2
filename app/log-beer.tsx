@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing } from 'react-native-reanimated';
 import { Colors, Fonts } from '../constants/theme';
 import { BEER_TYPES } from '../constants/mockData';
 import { useAuthStore } from '../stores/authStore';
@@ -22,6 +23,36 @@ export default function LogBeerScreen() {
   const [error, setError] = useState('');
   const [showConfetti, setShowConfetti] = useState(false);
   const [noTypeError, setNoTypeError] = useState(false);
+
+  // Animation remplissage verre
+  const fillHeight = useSharedValue(0);
+  const glassScale = useSharedValue(1);
+  const fillColor = useSharedValue('#F5A623');
+
+  const BEER_COLORS: Record<string, string> = {
+    blonde: '#F5A623', blanche: '#FFD54F', brune: '#5D4037',
+    ipa: '#E65100', craft: '#6D4C41', autre: '#9E9E9E',
+  };
+
+  const selectType = (key: string) => {
+    setSelectedType(key);
+    setNoTypeError(false);
+    // Animation
+    fillHeight.value = 0;
+    glassScale.value = withSpring(1.05, { damping: 8 }, () => {
+      glassScale.value = withSpring(1);
+    });
+    fillHeight.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
+  };
+
+  const fillStyle = useAnimatedStyle(() => ({
+    height: `${fillHeight.value * 100}%`,
+    backgroundColor: BEER_COLORS[selectedType ?? 'blonde'] ?? '#F5A623',
+  }));
+
+  const glassStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: glassScale.value }],
+  }));
 
   // Navigation sûre : back si possible, sinon redirect feed
   const safeGoBack = () => {
@@ -114,6 +145,19 @@ export default function LogBeerScreen() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        {/* Verre animé */}
+        {selectedType && (
+          <Animated.View style={[styles.glassContainer, glassStyle]}>
+            <View style={styles.glass}>
+              <View style={styles.glassFoam} />
+              <View style={styles.glassInner}>
+                <Animated.View style={[styles.glassFill, fillStyle]} />
+              </View>
+            </View>
+            <Text style={styles.glassLabel}>{BEER_TYPES.find(t => t.key === selectedType)?.label}</Text>
+          </Animated.View>
+        )}
+
         {/* Beer type selector */}
         <Text style={styles.sectionLabel}>Type de bière</Text>
         {/* Bug #6 : message d'erreur si aucun type */}
@@ -132,7 +176,7 @@ export default function LogBeerScreen() {
                   isActive && styles.typeBtnActive,
                   noTypeError && !selectedType && styles.typeBtnError,
                 ]}
-                onPress={() => { setSelectedType(t.key); setNoTypeError(false); }}
+                onPress={() => selectType(t.key)}
               >
                 {IconComponent ? (
                   <IconComponent size={56} active={isActive} />
@@ -183,6 +227,18 @@ export default function LogBeerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  // Verre animé
+  glassContainer: { alignItems: 'center', marginBottom: 16 },
+  glass: {
+    width: 60, height: 80, borderRadius: 8, borderWidth: 2, borderColor: '#555',
+    overflow: 'hidden', backgroundColor: '#1A1A1A',
+  },
+  glassFoam: {
+    height: 10, backgroundColor: '#FFF8E1', borderBottomWidth: 1, borderBottomColor: '#FFE082',
+  },
+  glassInner: { flex: 1, justifyContent: 'flex-end' },
+  glassFill: { width: '100%', borderRadius: 4 },
+  glassLabel: { color: Colors.primary, fontWeight: '700', fontSize: 13, marginTop: 6 },
   successContainer: { alignItems: 'center', justifyContent: 'center' },
   successEmoji: { fontSize: 64, marginBottom: 16 },
   successText: { ...Fonts.screenTitle, fontSize: 28, color: Colors.success },

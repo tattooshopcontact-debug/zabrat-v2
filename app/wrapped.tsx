@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { shareWrapped } from '../lib/shareService';
 import { Colors, Fonts } from '../constants/theme';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
@@ -157,6 +158,12 @@ export default function WrappedScreen() {
         <Pressable style={styles.shareBtn}>
           <Ionicons name="share-social" size={18} color="#000" />
           <Text style={styles.shareBtnText}>Partager sur Instagram / WhatsApp</Text>
+        </Pressable>
+        <Pressable style={[styles.shareBtn, { backgroundColor: '#25D366' }]} onPress={() => {
+          if (data) shareWrapped(data.month, data.totalBeers, data.favoriteBar);
+        }}>
+          <Ionicons name="logo-whatsapp" size={18} color="#FFF" />
+          <Text style={[styles.shareBtnText, { color: '#FFF' }]}>WhatsApp</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
