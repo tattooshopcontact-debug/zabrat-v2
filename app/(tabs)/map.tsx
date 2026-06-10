@@ -47,7 +47,7 @@ export default function MapScreen() {
 
   useEffect(() => {
     const unsub = subscribeToCheckins(() => loadData());
-    return unsub;
+    return () => { unsub(); };
   }, [loadData]);
 
   const handleCheckin = async (bar: Bar) => {
