@@ -167,8 +167,12 @@ export function MapboxWeb({ bars, onBarSelect, center }: MapboxWebProps) {
     // Éviter la double initialisation
     if (mapRef.current) return;
 
+    let cancelled = false;
+    const resizeTimers: ReturnType<typeof setTimeout>[] = [];
+
     const initMap = async () => {
       const mapboxgl = (await import('mapbox-gl')).default;
+      if (cancelled) return;
 
       // Injecter le CSS Mapbox
       if (!document.getElementById('mapbox-css')) {
@@ -182,6 +186,7 @@ export function MapboxWeb({ bars, onBarSelect, center }: MapboxWebProps) {
           setTimeout(resolve, 3000);
         });
       }
+      if (cancelled) return;
 
       // Injecter les keyframes du halo pulsant (une seule fois),
       // protégées par prefers-reduced-motion
@@ -208,13 +213,22 @@ export function MapboxWeb({ bars, onBarSelect, center }: MapboxWebProps) {
 
       (mapboxgl as any).accessToken = token;
 
+      // Guard null au cas où le ref serait devenu null entre les awaits
+      if (!mapContainer.current) return;
+
       const map = new mapboxgl.Map({
-        container: mapContainer.current!,
+        container: mapContainer.current,
         style: 'mapbox://styles/mapbox/dark-v11',
         center: [center.lng, center.lat],
         zoom: 13,
         attributionControl: false,
       });
+
+      // Si l'effet a été annulé juste après la création de la map, on la détruit
+      if (cancelled) {
+        map.remove();
+        return;
+      }
 
       mapRef.current = map;
 
@@ -222,14 +236,16 @@ export function MapboxWeb({ bars, onBarSelect, center }: MapboxWebProps) {
         drawMarkersRef.current(map, mapboxgl);
       });
 
-      // Forcer un resize après le rendu
-      setTimeout(() => map.resize(), 500);
-      setTimeout(() => map.resize(), 1500);
+      // Forcer un resize après le rendu — ids conservés pour clearTimeout
+      resizeTimers.push(setTimeout(() => map.resize(), 500));
+      resizeTimers.push(setTimeout(() => map.resize(), 1500));
     };
 
     initMap();
 
     return () => {
+      cancelled = true;
+      resizeTimers.forEach(clearTimeout);
       markersRef.current.forEach(m => m.remove());
       markersRef.current = [];
       if (mapRef.current) {
