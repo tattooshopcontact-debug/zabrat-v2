@@ -6,9 +6,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing,
-} from 'react-native-reanimated';
 import { MOCK_FEED_ITEMS } from '../../constants/mockData';
 import { Avatar } from '../../components/Avatar';
 import { useAuthStore } from '../../stores/authStore';
@@ -19,6 +16,8 @@ import { AnimatedCard } from '../../components/AnimatedCard';
 import NeonButton from '../../components/neon/NeonButton';
 import BeerGlass from '../../components/neon/BeerGlass';
 import { useTabBarPadding } from '../../components/neon/useTabBarPadding';
+import { PulsingDot } from '../../components/neon/PulsingDot';
+import { RingAvatar } from '../../components/neon/RingAvatar';
 import { Colors, Fonts, Glow, Gradients, Radius, Spacing } from '../../constants/theme';
 
 /* ─── Helpers avatars (mêmes règles que feedService) ─── */
@@ -45,52 +44,6 @@ const FR_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juill
 function todayLine(): string {
   const d = new Date();
   return `${FR_DAYS[d.getDay()]} ${d.getDate()} ${FR_MONTHS[d.getMonth()]} · La Marsa`;
-}
-
-/* ─── Dot live pulsant (opacity 0.4 → 1, cycle 1.8s) ─── */
-function PulsingDot({ size = 5 }: { size?: number }) {
-  const opacity = useSharedValue(0.4);
-
-  useEffect(() => {
-    opacity.value = withRepeat(
-      withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true,
-    );
-  }, [opacity]);
-
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-
-  return (
-    <Animated.View
-      style={[
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: Colors.cyan },
-        style,
-      ]}
-    />
-  );
-}
-
-/* ─── Avatar avec anneau néon (ambre = streak, cyan = live) ─── */
-function RingAvatar({ initials, color, size, ring }: {
-  initials: string; color: string; size: number; ring: 'amber' | 'cyan';
-}) {
-  const ringColor = ring === 'cyan' ? Colors.cyan : Colors.primary;
-  const glow = ring === 'cyan' ? Glow.live : Glow.card;
-  const outer = size + 8; // bordure 2 + écart 2 de chaque côté
-  return (
-    <View
-      style={{
-        width: outer, height: outer, borderRadius: outer / 2,
-        borderWidth: 2, borderColor: ringColor,
-        alignItems: 'center', justifyContent: 'center',
-        backgroundColor: Colors.background,
-        boxShadow: glow,
-      }}
-    >
-      <Avatar initials={initials} color={color} size={size} />
-    </View>
-  );
 }
 
 /* ─── « Qui sort ce soir » ─── */
@@ -306,9 +259,10 @@ export default function FeedScreen() {
   }, [user, loadFeed]);
 
   useEffect(() => {
+    if (!user) return;
     const unsub = subscribeToCheckins(() => loadWhoIsOut());
     return () => { unsub(); };
-  }, [loadWhoIsOut]);
+  }, [user, loadWhoIsOut]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
