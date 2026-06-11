@@ -19,19 +19,9 @@ import {
   getFriends, getPendingRequests, acceptFriendRequest,
   removeFriendship, type FriendProfile, type FriendRequest,
 } from '../lib/friendsService';
+import { colorFor, initialsOf } from '../lib/avatarColor';
 
 type Tab = 'friends' | 'requests' | 'search';
-
-/* ─── Avatars déterministes (mêmes règles que le feed) ─── */
-const AVATAR_COLORS = ['#FF6B35', '#4CAF50', Colors.primary, '#E91E63', '#2196F3', '#9C27B0'];
-
-function colorFor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-const initials = (name: string) => name.slice(0, 2).toUpperCase();
 
 export default function FriendsScreen() {
   const router = useRouter();
@@ -182,10 +172,10 @@ export default function FriendsScreen() {
       <AnimatedCard key={f.id} index={idx}>
         <View style={styles.card}>
           {liveBar ? (
-            <RingAvatar initials={initials(f.display_name)} color={colorFor(f.display_name)} size={44} ring="cyan" />
+            <RingAvatar initials={initialsOf(f.display_name)} color={colorFor(f.display_name)} size={44} ring="cyan" />
           ) : (
             <View style={styles.avatarSlot}>
-              <Avatar initials={initials(f.display_name)} color={colorFor(f.display_name)} size={44} />
+              <Avatar initials={initialsOf(f.display_name)} color={colorFor(f.display_name)} size={44} />
             </View>
           )}
           <View style={styles.cardInfo}>
@@ -287,7 +277,7 @@ export default function FriendsScreen() {
               <AnimatedCard key={req.id} index={idx}>
                 <View style={styles.card}>
                   <View style={styles.avatarSlot}>
-                    <Avatar initials={initials(req.user.display_name)} color={colorFor(req.user.display_name)} size={44} />
+                    <Avatar initials={initialsOf(req.user.display_name)} color={colorFor(req.user.display_name)} size={44} />
                   </View>
                   <View style={styles.cardInfo}>
                     <Text style={styles.cardName}>{req.user.display_name}</Text>
@@ -345,7 +335,7 @@ export default function FriendsScreen() {
               <AnimatedCard key={r.id} index={idx}>
                 <View style={styles.card}>
                   <View style={styles.avatarSlot}>
-                    <Avatar initials={initials(r.display_name)} color={colorFor(r.display_name)} size={44} />
+                    <Avatar initials={initialsOf(r.display_name)} color={colorFor(r.display_name)} size={44} />
                   </View>
                   <View style={styles.cardInfo}>
                     <Text style={styles.cardName}>{r.display_name}</Text>

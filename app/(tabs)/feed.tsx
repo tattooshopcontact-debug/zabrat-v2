@@ -19,20 +19,9 @@ import { useTabBarPadding } from '../../components/neon/useTabBarPadding';
 import { PulsingDot } from '../../components/neon/PulsingDot';
 import { RingAvatar } from '../../components/neon/RingAvatar';
 import { Colors, Fonts, Glow, Gradients, Radius, Spacing } from '../../constants/theme';
+import { colorFor, initialsOf } from '../../lib/avatarColor';
 
-/* ─── Helpers avatars (mêmes règles que feedService) ─── */
-const AVATAR_COLORS = ['#FF6B35', '#4CAF50', Colors.primary, '#E91E63', '#2196F3', '#9C27B0'];
-
-function colorFor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function initialsOf(name: string): string {
-  return name.slice(0, 2).toUpperCase();
-}
-
+/* ─── Helpers avatars (util partagé : lib/avatarColor) ─── */
 function firstNameOf(name: string): string {
   return name.split(/\s+/)[0] ?? name;
 }

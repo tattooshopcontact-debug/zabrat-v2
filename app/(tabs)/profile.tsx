@@ -18,6 +18,7 @@ import { supabase } from '../../lib/supabase';
 import StatNumber from '../../components/neon/StatNumber';
 import NeonButton from '../../components/neon/NeonButton';
 import { useTabBarPadding } from '../../components/neon/useTabBarPadding';
+import { initialsOf } from '../../lib/avatarColor';
 
 /* ─── Anneau de progression XP (SVG, rotation -90°, dasharray ∝ % XP) ─── */
 const RING_SIZE = 118;
@@ -102,12 +103,6 @@ function BadgeTile({ badge }: { badge: BadgeData }) {
       <Text style={s.badgeName} numberOfLines={2}>{badge.name}</Text>
     </View>
   );
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
 }
 
 /* ─── Main ─── */
@@ -231,7 +226,7 @@ export default function ProfileScreen() {
               {user.avatar_url ? (
                 <Image source={{ uri: user.avatar_url }} style={s.avatarImage} />
               ) : (
-                <Avatar initials={getInitials(user.display_name)} color={Colors.accent} size={94} />
+                <Avatar initials={initialsOf(user.display_name)} color={Colors.accent} size={94} />
               )}
             </XPRing>
             <View style={s.avatarEditBadge}>

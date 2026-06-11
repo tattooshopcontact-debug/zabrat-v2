@@ -19,13 +19,12 @@ import {
   getBarsWithCheckins, checkinBar, getWhoIsOut, subscribeToCheckins,
   type Bar, type ActiveCheckin,
 } from '../../lib/mapService';
+import { initialsOf } from '../../lib/avatarColor';
 
 type VisibilityMode = 'public' | 'friends' | 'ghost';
 type ToastData = { text: string; tone: 'success' | 'error' };
 
 const CENTER = { lat: 36.8780, lng: 10.3250 };
-
-const initials = (name: string) => name.slice(0, 2).toUpperCase();
 
 /* ─── Toast flottant vert (check-in) — fade + slide reanimated ─── */
 function Toast({ toast, bottom }: { toast: ToastData; bottom: number }) {
@@ -308,7 +307,7 @@ export default function MapScreen() {
                 key={c.id}
                 style={[s.whoRow, i < liveFriends.length - 1 && s.whoRowBorder]}
               >
-                <RingAvatar initials={initials(c.display_name)} color={Colors.surface2} size={36} ring="cyan" />
+                <RingAvatar initials={initialsOf(c.display_name)} color={Colors.surface2} size={36} ring="cyan" />
                 <View style={{ flex: 1 }}>
                   <Text style={s.whoName}>{c.display_name}</Text>
                   <Text style={s.whoBar}>📍 au {c.bar_name}</Text>
