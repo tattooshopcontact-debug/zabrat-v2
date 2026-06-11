@@ -1,250 +1,165 @@
-import React, { useState, useRef } from 'react';
-import {
-  View, Text, StyleSheet, Pressable, ScrollView,
-  Dimensions, TextInput, ActivityIndicator, Image,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Fonts } from '../constants/theme';
-import { useAuthStore } from '../stores/authStore';
-import { supabase } from '../lib/supabase';
+import Animated, { FadeInUp } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Colors, Fonts, Glow } from '../constants/theme';
+import ZabratLogo from '../components/neon/ZabratLogo';
+import NeonButton from '../components/neon/NeonButton';
+import { RingAvatar } from '../components/neon/RingAvatar';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// ─── Visuels illustratifs (inline, suivant le handoff zabrat-flows.jsx) ───
 
-type Step = 1 | 2 | 3 | 4 | 5;
-
-export default function OnboardingScreen() {
-  const router = useRouter();
-  const scrollRef = useRef<ScrollView>(null);
-  const { user, devMode, setUser, fetchProfile } = useAuthStore();
-
-  const [step, setStep] = useState<Step>(1);
-  const [phone, setPhone] = useState('+216');
-  const [otp, setOtp] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [username, setUsername] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const goToStep = (s: Step) => {
-    setStep(s);
-    scrollRef.current?.scrollTo({ x: (s - 1) * SCREEN_WIDTH, animated: true });
-  };
-
-  // Step 2: Send OTP
-  const handleSendOtp = async () => {
-    if (devMode) { goToStep(3); return; }
-    setLoading(true); setError('');
-    const { error: e } = await supabase.auth.signInWithOtp({ phone });
-    setLoading(false);
-    if (e) { setError(e.message); return; }
-    goToStep(3);
-  };
-
-  // Step 3: Verify OTP (skip in dev)
-  const handleVerifyOtp = async () => {
-    if (devMode) { goToStep(4); return; }
-    setLoading(true); setError('');
-    const { data, error: e } = await supabase.auth.verifyOtp({ phone, token: otp, type: 'sms' });
-    setLoading(false);
-    if (e) { setError(e.message); return; }
-    if (data.session) {
-      useAuthStore.getState().setSession(data.session);
-    }
-    goToStep(4);
-  };
-
-  // Step 4: Create profile
-  const handleCreateProfile = async () => {
-    if (!displayName.trim()) { setError('Prénom obligatoire'); return; }
-    if (devMode) { goToStep(5); return; }
-    setLoading(true); setError('');
-    const session = useAuthStore.getState().session;
-    if (!session) return;
-    const uname = username.trim().toLowerCase().replace(/\s/g, '_') || displayName.trim().toLowerCase().replace(/\s/g, '_');
-    const { error: e } = await supabase.from('users').insert({
-      id: session.user.id, phone, display_name: displayName.trim(), username: uname,
-    });
-    setLoading(false);
-    if (e) { setError(e.message); return; }
-    await fetchProfile(session.user.id);
-    goToStep(5);
-  };
-
-  // Step 5: First beer → go to feed
-  const handleFirstBeer = () => {
-    router.replace('/(tabs)/feed');
-  };
-
+function MiniMap() {
   return (
-    <View style={styles.container}>
-      {/* Progress dots */}
-      <View style={styles.dots}>
-        {[1, 2, 3, 4, 5].map((s) => (
-          <View key={s} style={[styles.dot, step >= s && styles.dotActive]} />
-        ))}
+    <View style={s.miniMap}>
+      {/* Rues stylisées */}
+      <View style={[s.street, { top: 52, left: -20, width: 300, transform: [{ rotate: '-8deg' }] }]} />
+      <View style={[s.street, { top: 108, left: -20, width: 300, transform: [{ rotate: '5deg' }] }]} />
+      <View style={[s.street, { top: -20, left: 150, width: 220, transform: [{ rotate: '78deg' }] }]} />
+      {/* Pastilles glow ambre */}
+      <View style={[s.mapDot, { left: '34%', top: '42%', width: 14, height: 14, borderRadius: 7 }]} />
+      <View style={[s.mapDot, s.mapDotSoft, { left: '60%', top: '64%' }]} />
+      <View style={[s.mapDot, s.mapDotSoft, { left: '14%', top: '70%', opacity: 0.6 }]} />
+      {/* Mini-avatars amis */}
+      <View style={{ position: 'absolute', left: '22%', top: '18%' }}>
+        <RingAvatar initials="KH" color="#7C5CFF" size={24} ring="cyan" />
       </View>
-
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        scrollEnabled={false}
-        showsHorizontalScrollIndicator={false}
-        style={styles.scroll}
-      >
-        {/* Step 1: Splash — avec image générée */}
-        <View style={styles.page}>
-          <Image source={require('../assets/images/logo.jpg')} style={styles.splashImage} resizeMode="contain" />
-          <Text style={styles.splashTitle}>Zabrat</Text>
-          <Text style={styles.splashTagline}>Track. Share. Compete.</Text>
-          <View style={styles.splashFeatures}>
-            <Text style={styles.feature}>📊 Traque tes soirées</Text>
-            <Text style={styles.feature}>🏆 Défie tes amis</Text>
-            <Text style={styles.feature}>🗺️ Vois qui sort ce soir</Text>
-          </View>
-          <Pressable style={styles.ctaBtn} onPress={() => goToStep(2)}>
-            <Text style={styles.ctaBtnText}>Commencer</Text>
-          </Pressable>
-        </View>
-
-        {/* Step 2: Phone */}
-        <View style={styles.page}>
-          <Text style={styles.stepEmoji}>📱</Text>
-          <Text style={styles.stepTitle}>Ton numéro</Text>
-          <Text style={styles.stepSub}>On t'envoie un code par SMS</Text>
-          <TextInput
-            style={styles.input}
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-            placeholder="+216 XX XXX XXX"
-            placeholderTextColor={Colors.textMuted}
-          />
-          <Text style={styles.testHint}>En test : utilise le code 123456</Text>
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Pressable style={styles.ctaBtn} onPress={handleSendOtp} disabled={loading}>
-            {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.ctaBtnText}>Envoyer le code</Text>}
-          </Pressable>
-        </View>
-
-        {/* Step 3: OTP (skipped in devMode) */}
-        <View style={styles.page}>
-          <Text style={styles.stepEmoji}>🔐</Text>
-          <Text style={styles.stepTitle}>Code de vérification</Text>
-          <Text style={styles.stepSub}>Entre le code reçu par SMS</Text>
-          <TextInput
-            style={[styles.input, styles.otpInput]}
-            value={otp}
-            onChangeText={setOtp}
-            keyboardType="number-pad"
-            maxLength={6}
-            placeholder="000000"
-            placeholderTextColor={Colors.textMuted}
-            textAlign="center"
-          />
-          <Text style={styles.testHint}>En test : utilise le code 123456</Text>
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Pressable style={styles.ctaBtn} onPress={handleVerifyOtp} disabled={loading}>
-            {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.ctaBtnText}>Vérifier</Text>}
-          </Pressable>
-        </View>
-
-        {/* Step 4: Profile */}
-        <View style={styles.page}>
-          <Text style={styles.stepEmoji}>👤</Text>
-          <Text style={styles.stepTitle}>Ton profil</Text>
-          <Text style={styles.stepSub}>Comment on t'appelle ?</Text>
-          <TextInput
-            style={styles.input}
-            value={displayName}
-            onChangeText={setDisplayName}
-            placeholder="Ton prénom"
-            placeholderTextColor={Colors.textMuted}
-          />
-          <TextInput
-            style={[styles.input, { marginTop: 12 }]}
-            value={username}
-            onChangeText={setUsername}
-            placeholder="Pseudo (optionnel)"
-            placeholderTextColor={Colors.textMuted}
-            autoCapitalize="none"
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Pressable style={styles.ctaBtn} onPress={handleCreateProfile} disabled={loading}>
-            {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.ctaBtnText}>Continuer</Text>}
-          </Pressable>
-        </View>
-
-        {/* Step 5: First beer! */}
-        <View style={styles.page}>
-          <Text style={styles.splashEmoji}>🎉</Text>
-          <Text style={styles.stepTitle}>C'est parti !</Text>
-          <Text style={styles.stepSub}>Logger ta première bière pour débloquer ton premier badge</Text>
-          <View style={styles.badgePreview}>
-            <Text style={styles.badgePreviewEmoji}>🥤</Text>
-            <Text style={styles.badgePreviewName}>Premier Verre</Text>
-            <Text style={styles.badgePreviewDesc}>Logger ta 1ère bière</Text>
-          </View>
-          <Pressable style={styles.ctaBtn} onPress={handleFirstBeer}>
-            <Text style={styles.ctaBtnText}>🍺 Logger ma première bière !</Text>
-          </Pressable>
-          <Pressable style={styles.skipBtn} onPress={() => router.replace('/(tabs)/feed')}>
-            <Text style={styles.skipText}>Plus tard →</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+      <View style={{ position: 'absolute', left: '68%', top: '40%' }}>
+        <RingAvatar initials="MA" color="#FF5C8A" size={24} ring="cyan" />
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  splashImage: {
-    width: 130, height: 130, marginBottom: 20, borderRadius: 32,
-    shadowColor: '#F5A623', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4, shadowRadius: 20,
+function MiniPodium() {
+  const bars = [
+    { h: 64, win: false },
+    { h: 92, win: true },
+    { h: 46, win: false },
+  ];
+  return (
+    <View style={s.podium}>
+      {bars.map((b, i) => (
+        <LinearGradient
+          key={i}
+          colors={
+            b.win
+              ? ['rgba(255,149,0,0.45)', 'rgba(255,149,0,0.06)']
+              : ['rgba(255,149,0,0.22)', 'rgba(255,149,0,0.03)']
+          }
+          style={[s.podiumBar, { height: b.h }, b.win && s.podiumBarWin]}
+        />
+      ))}
+    </View>
+  );
+}
+
+// ─── Écran ───
+
+type Slide = { visual: React.ReactNode; title: string; sub: string };
+
+export default function OnboardingScreen() {
+  const router = useRouter();
+  const [slide, setSlide] = useState(0);
+
+  const slides: Slide[] = [
+    { visual: <ZabratLogo size={150} />, title: 'Zabrat', sub: 'Tes soirées comptent.' },
+    { visual: <MiniMap />, title: 'Vois qui sort,', sub: 'et où ça bouge.' },
+    { visual: <MiniPodium />, title: 'Sois le roi', sub: 'de la semaine.' },
+  ];
+
+  const last = slide === slides.length - 1;
+  const current = slides[slide];
+
+  const finish = () => router.replace('/(tabs)/feed');
+
+  return (
+    <View style={s.container}>
+      {/* Passer — discret en haut à droite */}
+      <Pressable style={s.skipBtn} onPress={finish} hitSlop={10}>
+        <Text style={s.skipText}>Passer</Text>
+      </Pressable>
+
+      {/* Contenu du slide courant — fade-up à chaque changement */}
+      <View style={s.center}>
+        <Animated.View key={`v${slide}`} entering={FadeInUp.duration(400)} style={s.visual}>
+          {current.visual}
+        </Animated.View>
+        <Animated.View key={`t${slide}`} entering={FadeInUp.duration(400).delay(80)}>
+          <Text style={s.title}>{current.title}</Text>
+          <Text style={s.sub}>{current.sub}</Text>
+        </Animated.View>
+      </View>
+
+      {/* Dots */}
+      <View style={s.dots}>
+        {slides.map((_, i) => (
+          <View key={i} style={[s.dot, i === slide && s.dotActive]} />
+        ))}
+      </View>
+
+      <NeonButton
+        title={last ? "C'est parti 🍺" : 'Continuer'}
+        onPress={() => (last ? finish() : setSlide(slide + 1))}
+        style={s.cta}
+      />
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  container: {
+    flex: 1, backgroundColor: Colors.background,
+    paddingTop: 64, paddingBottom: 44, paddingHorizontal: 32,
+    alignItems: 'center',
   },
-  dots: {
-    flexDirection: 'row', justifyContent: 'center', gap: 8,
-    paddingTop: 60, paddingBottom: 20,
+  skipBtn: { alignSelf: 'flex-end', padding: 6 },
+  skipText: { ...Fonts.bodyBold, fontSize: 13.5, color: Colors.textMuted },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 36 },
+  visual: { alignItems: 'center', justifyContent: 'center', minHeight: 160 },
+  title: {
+    ...Fonts.display, fontSize: 38, lineHeight: 42,
+    color: Colors.text, textAlign: 'center', letterSpacing: 0.4,
   },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2A2A2A' },
-  dotActive: { backgroundColor: '#F5A623', width: 28, borderRadius: 6 },
-  scroll: { flex: 1 },
-  page: {
-    width: SCREEN_WIDTH, paddingHorizontal: 32,
-    justifyContent: 'center', alignItems: 'center',
+  sub: {
+    ...Fonts.display, fontSize: 38, lineHeight: 42,
+    color: Colors.primary, textAlign: 'center', letterSpacing: 0.4,
+    ...Glow.textAmber,
   },
-  splashEmoji: { fontSize: 80, marginBottom: 16 },
-  splashTitle: { fontSize: 42, fontWeight: '900', color: '#FFFFFF', marginBottom: 8, letterSpacing: -1 },
-  splashTagline: { fontSize: 14, color: '#888888', marginBottom: 40, letterSpacing: 2, fontWeight: '500' },
-  splashFeatures: { gap: 16, marginBottom: 40, alignItems: 'flex-start' },
-  feature: { fontSize: 16, color: '#FFFFFF', fontWeight: '500' },
-  stepEmoji: { fontSize: 56, marginBottom: 16 },
-  stepTitle: { ...Fonts.screenTitle, fontSize: 28, marginBottom: 8 },
-  stepSub: { ...Fonts.label, fontSize: 14, marginBottom: 30, textAlign: 'center' },
-  input: {
-    width: '100%', height: 52, backgroundColor: Colors.surface,
-    borderRadius: 12, borderWidth: 1, borderColor: Colors.border,
-    color: Colors.text, fontSize: 18, paddingHorizontal: 16,
+  // Mini-carte (slide 2)
+  miniMap: {
+    width: 240, height: 160, borderRadius: 18, overflow: 'hidden',
+    backgroundColor: Colors.mapBg, borderWidth: 1, borderColor: Colors.border,
+    boxShadow: '0 0 40px rgba(0,229,255,0.10)',
   },
-  otpInput: { fontSize: 28, fontWeight: '700', letterSpacing: 12 },
-  testHint: { color: Colors.primary, fontSize: 11, marginTop: 8, fontWeight: '600' },
-  error: { color: Colors.danger, fontSize: 12, marginTop: 8, textAlign: 'center' },
-  ctaBtn: {
-    width: '100%', height: 52, backgroundColor: Colors.primary,
-    borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 24,
+  street: { position: 'absolute', height: 2, backgroundColor: 'rgba(255,255,255,0.05)' },
+  mapDot: {
+    position: 'absolute', width: 10, height: 10, borderRadius: 5,
+    backgroundColor: Colors.primary,
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)',
+    boxShadow: '0 0 18px rgba(255,149,0,0.77)',
   },
-  ctaBtnText: { color: '#000', fontSize: 16, fontWeight: '800' },
-  badgePreview: {
-    backgroundColor: Colors.surface, borderRadius: 16, padding: 24,
-    alignItems: 'center', borderWidth: 1, borderColor: Colors.primary,
-    marginVertical: 24, width: '80%',
+  mapDotSoft: { borderWidth: 0, opacity: 0.8, boxShadow: '0 0 12px rgba(255,149,0,0.51)' },
+  // Mini-podium (slide 3)
+  podium: {
+    flexDirection: 'row', alignItems: 'flex-end', gap: 10,
+    width: 210, height: 110,
   },
-  badgePreviewEmoji: { fontSize: 48, marginBottom: 8 },
-  badgePreviewName: { ...Fonts.bodyBold, fontSize: 18 },
-  badgePreviewDesc: { ...Fonts.label, marginTop: 4 },
-  skipBtn: { marginTop: 16, padding: 12 },
-  skipText: { color: Colors.textMuted, fontSize: 14 },
+  podiumBar: {
+    flex: 1, borderTopLeftRadius: 8, borderTopRightRadius: 8,
+    borderWidth: 1, borderBottomWidth: 0, borderColor: Colors.border,
+  },
+  podiumBarWin: {
+    borderColor: 'rgba(255,149,0,0.6)',
+    boxShadow: '0 -2px 28px rgba(255,149,0,0.30)',
+  },
+  // Dots
+  dots: { flexDirection: 'row', gap: 8, marginBottom: 28, alignItems: 'center' },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.15)' },
+  dotActive: {
+    width: 24, height: 6, borderRadius: 999, backgroundColor: Colors.primary,
+    boxShadow: '0 0 10px rgba(255,149,0,0.51)',
+  },
+  cta: { alignSelf: 'stretch' },
 });
