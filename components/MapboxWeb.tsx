@@ -189,12 +189,12 @@ export function MapboxWeb({ bars, onBarSelect, center }: MapboxWebProps) {
         const style = document.createElement('style');
         style.id = 'zabrat-marker-pulse-style';
         style.textContent = `
-          @keyframes zabrat-marker-pulse {
-            0% { transform: scale(1); opacity: 0.7; }
-            50% { transform: scale(1.45); opacity: 0.25; }
-            100% { transform: scale(1); opacity: 0.7; }
-          }
           @media (prefers-reduced-motion: no-preference) {
+            @keyframes zabrat-marker-pulse {
+              0% { transform: scale(1); opacity: 0.7; }
+              50% { transform: scale(1.45); opacity: 0.25; }
+              100% { transform: scale(1); opacity: 0.7; }
+            }
             .zabrat-marker-pulse {
               animation-name: zabrat-marker-pulse;
               animation-duration: 2.6s;
