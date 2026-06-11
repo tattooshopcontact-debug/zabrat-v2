@@ -1,71 +1,52 @@
 import React, { useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withRepeat, withSequence, withTiming,
+  useSharedValue, useAnimatedStyle, withSpring, withSequence,
 } from 'react-native-reanimated';
-import { Colors, TabBar } from '../../constants/theme';
+import { Colors, TabBar, Glow, Gradients } from '../../constants/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-function PlusButton() {
+// Bouton LOG central : cercle 64px surélevé, dégradé ambre→orange, glow permanent, label « LOG »
+function LogButton() {
   const router = useRouter();
   const scale = useSharedValue(1);
-  const glow = useSharedValue(0.3);
-
-  // Pulse glow subtil en continu
-  useEffect(() => {
-    glow.value = withRepeat(
-      withSequence(
-        withTiming(0.6, { duration: 1500 }),
-        withTiming(0.3, { duration: 1500 }),
-      ),
-      -1, true
-    );
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    shadowOpacity: glow.value,
-  }));
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   const handlePress = () => {
     scale.value = withSequence(
-      withSpring(0.85, { damping: 10 }),
-      withSpring(1.1, { damping: 6 }),
+      withSpring(0.9, { damping: 10 }),
       withSpring(1, { damping: 8 }),
     );
-    setTimeout(() => router.push('/log-beer'), 150);
+    setTimeout(() => router.push('/log-beer'), 120);
   };
 
   return (
-    <AnimatedPressable onPress={handlePress} style={[styles.plusButton, animStyle]}>
-      <Ionicons name="add" size={30} color="#FFFFFF" />
-    </AnimatedPressable>
+    <View style={styles.logWrap}>
+      <AnimatedPressable onPress={handlePress} style={[styles.logButton, animStyle]}>
+        <LinearGradient colors={[...Gradients.cta]} style={styles.logGradient}>
+          <Ionicons name="beer" size={30} color={Colors.onAmber} />
+        </LinearGradient>
+      </AnimatedPressable>
+      <Text style={styles.logLabel}>LOG</Text>
+    </View>
   );
 }
 
-// Icône tab animée
-function TabIcon({ name, color, size, focused }: { name: string; color: string; size: number; focused: boolean }) {
+// Onglet : icône + label, actif = ambre + point lumineux 4px sous le label
+function TabIcon({ name, color, focused }: { name: keyof typeof Ionicons.glyphMap; color: string; focused: boolean }) {
   const scale = useSharedValue(1);
-
   useEffect(() => {
-    if (focused) {
-      scale.value = withSequence(
-        withSpring(1.2, { damping: 8 }),
-        withSpring(1, { damping: 10 }),
-      );
-    }
+    if (focused) scale.value = withSequence(withSpring(1.15, { damping: 8 }), withSpring(1, { damping: 10 }));
   }, [focused]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
-    <Animated.View style={animStyle}>
-      <Ionicons name={name as any} size={size} color={color} />
+    <Animated.View style={[animStyle, styles.iconWrap]}>
+      <Ionicons name={name} size={23} color={color} />
+      <View style={[styles.activeDot, { opacity: focused ? 1 : 0 }]} />
     </Animated.View>
   );
 }
@@ -79,89 +60,60 @@ export default function TabsLayout() {
         tabBarActiveTintColor: TabBar.activeColor,
         tabBarInactiveTintColor: TabBar.inactiveColor,
         tabBarLabelStyle: styles.tabLabel,
+        tabBarBackground: () => (
+          <View style={StyleSheet.absoluteFill}>
+            {/* Liseré dégradé ambre 1.5px au-dessus de la barre */}
+            <LinearGradient
+              colors={['transparent', Colors.primary, Colors.accent, 'transparent']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              locations={[0, 0.45, 0.6, 1]}
+              style={styles.topEdge}
+            />
+            <View style={styles.barBg} />
+          </View>
+        ),
       }}
     >
-      <Tabs.Screen
-        name="feed"
-        options={{
-          title: 'Feed',
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="home" color={color} size={size} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="stats"
-        options={{
-          title: 'Stats',
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="stats-chart" color={color} size={size} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="map"
-        options={{
-          title: 'Map',
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="map" color={color} size={size} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="plus"
-        options={{
-          title: '',
-          tabBarButton: () => <PlusButton />,
-        }}
-        listeners={{ tabPress: (e) => e.preventDefault() }}
-      />
-      <Tabs.Screen
-        name="top"
-        options={{
-          title: 'Top',
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="trophy" color={color} size={size} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profil',
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="person" color={color} size={size} focused={focused} />
-          ),
-        }}
-      />
+      <Tabs.Screen name="feed" options={{
+        title: 'Ce soir',
+        tabBarIcon: ({ color, focused }) => <TabIcon name="moon" color={color} focused={focused} />,
+      }} />
+      <Tabs.Screen name="map" options={{
+        title: 'Carte',
+        tabBarIcon: ({ color, focused }) => <TabIcon name="map" color={color} focused={focused} />,
+      }} />
+      <Tabs.Screen name="plus" options={{ title: '', tabBarButton: () => <LogButton /> }}
+        listeners={{ tabPress: (e) => e.preventDefault() }} />
+      <Tabs.Screen name="top" options={{
+        title: 'Ligue',
+        tabBarIcon: ({ color, focused }) => <TabIcon name="trophy" color={color} focused={focused} />,
+      }} />
+      <Tabs.Screen name="profile" options={{
+        title: 'Profil',
+        tabBarIcon: ({ color, focused }) => <TabIcon name="person" color={color} focused={focused} />,
+      }} />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: TabBar.height,
-    backgroundColor: '#0D0D0D',
-    borderTopWidth: 1,
-    borderTopColor: '#1A1A1A',
-    paddingBottom: 6,
-    paddingTop: 6,
+    height: TabBar.height, borderTopWidth: 0, backgroundColor: 'transparent',
+    paddingBottom: 6, paddingTop: 6, position: 'absolute', elevation: 0,
   },
-  tabLabel: {
-    fontSize: 10,
-    fontWeight: '600',
+  topEdge: { height: 1.5 },
+  barBg: { flex: 1, backgroundColor: TabBar.background, ...(Platform.OS === 'web' ? { backdropFilter: 'blur(20px)' } as any : null) },
+  tabLabel: { fontFamily: 'Outfit_700Bold', fontSize: 10.5 },
+  iconWrap: { alignItems: 'center', gap: 3 },
+  activeDot: {
+    width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.primary,
+    boxShadow: '0 0 14px rgba(255,149,0,0.43)',
   },
-  plusButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -20,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
-    elevation: 10,
+  logWrap: { alignItems: 'center', marginTop: TabBar.logElevation },
+  logButton: { borderRadius: TabBar.logSize / 2, boxShadow: Glow.log },
+  logGradient: {
+    width: TabBar.logSize, height: TabBar.logSize, borderRadius: TabBar.logSize / 2,
+    alignItems: 'center', justifyContent: 'center',
   },
+  logLabel: { fontFamily: 'Outfit_800ExtraBold', fontSize: 10.5, color: Colors.primary, marginTop: 3 },
 });
