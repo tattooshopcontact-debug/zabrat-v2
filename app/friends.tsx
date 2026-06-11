@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  TextInput, ActivityIndicator, Alert, Image,
+  TextInput, ActivityIndicator, Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Fonts } from '../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Colors, Fonts, Glow, Gradients, Spacing } from '../constants/theme';
 import { Avatar } from '../components/Avatar';
+import { RingAvatar } from '../components/neon/RingAvatar';
 import { AnimatedCard } from '../components/AnimatedCard';
 import { useAuthStore } from '../stores/authStore';
 import { inviteViaWhatsApp } from '../lib/shareService';
+import { getWhoIsOut, subscribeToCheckins } from '../lib/mapService';
 import {
   searchByPhone, searchByUsername, sendFriendRequest,
   getFriends, getPendingRequests, acceptFriendRequest,
@@ -19,8 +22,20 @@ import {
 
 type Tab = 'friends' | 'requests' | 'search';
 
+/* ─── Avatars déterministes (mêmes règles que le feed) ─── */
+const AVATAR_COLORS = ['#FF6B35', '#4CAF50', '#F5A623', '#E91E63', '#2196F3', '#9C27B0'];
+
+function colorFor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+const initials = (name: string) => name.slice(0, 2).toUpperCase();
+
 export default function FriendsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const devMode = useAuthStore((s) => s.devMode);
 
@@ -32,6 +47,8 @@ export default function FriendsScreen() {
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [message, setMessage] = useState('');
+  // user_id → nom du bar si l'ami est en check-in en ce moment (anneau cyan)
+  const [liveBars, setLiveBars] = useState<Map<string, string>>(new Map());
 
   // Charger amis et demandes
   const loadData = useCallback(async () => {
@@ -54,8 +71,33 @@ export default function FriendsScreen() {
     loadData();
   }, [loadData]);
 
+  // Statut live des amis (check-in en cours) — dégrade silencieusement si vide
+  const loadLive = useCallback(async () => {
+    if (!user || devMode) return;
+    try {
+      const out = await getWhoIsOut(user.id);
+      const map = new Map<string, string>();
+      for (const c of out) {
+        if (!map.has(c.user_id)) map.set(c.user_id, c.bar_name);
+      }
+      setLiveBars(map);
+    } catch {
+      setLiveBars(new Map());
+    }
+  }, [user, devMode]);
+
+  useEffect(() => {
+    loadLive();
+  }, [loadLive]);
+
+  useEffect(() => {
+    if (!user || devMode) return;
+    const unsub = subscribeToCheckins(() => loadLive());
+    return () => { unsub(); };
+  }, [user, devMode, loadLive]);
+
   // Recherche
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
     setSearchLoading(true);
     setMessage('');
@@ -82,7 +124,19 @@ export default function FriendsScreen() {
       setMessage('Erreur de recherche');
     }
     setSearchLoading(false);
-  };
+  }, [searchQuery, user]);
+
+  // Filtre live : lance la recherche existante avec un léger debounce
+  useEffect(() => {
+    if (tab !== 'search') return;
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setMessage('');
+      return;
+    }
+    const t = setTimeout(() => { handleSearch(); }, 350);
+    return () => clearTimeout(t);
+  }, [tab, searchQuery, handleSearch]);
 
   // Envoyer demande
   const handleSendRequest = async (friendId: string) => {
@@ -116,68 +170,107 @@ export default function FriendsScreen() {
     }
   };
 
-  const initials = (name: string) => name.slice(0, 2).toUpperCase();
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'friends', label: 'Mes amis' },
+    { key: 'requests', label: `Demandes${requests.length ? ` (${requests.length})` : ''}` },
+    { key: 'search', label: 'Chercher' },
+  ];
+
+  const renderFriendCard = (f: FriendProfile, idx: number) => {
+    const liveBar = liveBars.get(f.id);
+    return (
+      <AnimatedCard key={f.id} index={idx}>
+        <View style={styles.card}>
+          {liveBar ? (
+            <RingAvatar initials={initials(f.display_name)} color={colorFor(f.display_name)} size={44} ring="cyan" />
+          ) : (
+            <View style={styles.avatarSlot}>
+              <Avatar initials={initials(f.display_name)} color={colorFor(f.display_name)} size={44} />
+            </View>
+          )}
+          <View style={styles.cardInfo}>
+            <Text style={styles.cardName}>{f.display_name}</Text>
+            <Text style={styles.cardSub} numberOfLines={1}>
+              {f.total_beers} bière{f.total_beers > 1 ? 's' : ''} ce mois
+              {liveBar ? <Text style={styles.cardLive}> · 📍 au {liveBar}</Text> : null}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#3A3A48" />
+        </View>
+      </AnimatedCard>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={Colors.text} />
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+          hitSlop={8}
+        >
+          <Ionicons name="chevron-back" size={20} color={Colors.text} />
         </Pressable>
-        <Text style={styles.headerTitle}>👥 Amis</Text>
-        <View style={{ width: 32 }} />
+        <Text style={styles.headerTitle}>Mes amis</Text>
       </View>
 
-      {/* Tabs */}
+      {/* Tabs segmentés */}
       <View style={styles.tabs}>
-        {(['friends', 'requests', 'search'] as Tab[]).map((t) => (
+        {tabs.map(({ key, label }) => (
           <Pressable
-            key={t}
-            style={[styles.tab, tab === t && styles.tabActive]}
-            onPress={() => setTab(t)}
+            key={key}
+            style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
+            onPress={() => setTab(key)}
           >
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t === 'friends' ? `Amis (${friends.length})` : t === 'requests' ? `Demandes (${requests.length})` : 'Chercher'}
-            </Text>
+            {tab === key ? (
+              <LinearGradient
+                colors={[...Gradients.cta]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabPill}
+              >
+                <Text style={styles.tabTextActive} numberOfLines={1}>{label}</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabIdle}>
+                <Text style={styles.tabText} numberOfLines={1}>{label}</Text>
+              </View>
+            )}
           </Pressable>
         ))}
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {/* Tab: Amis */}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Tab: Mes amis */}
         {tab === 'friends' && (
           <>
-            {loading && <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />}
+            {loading && <ActivityIndicator color={Colors.primary} style={{ marginTop: 24 }} />}
             {!loading && friends.length === 0 && (
               <View style={styles.empty}>
                 <Image source={require('../assets/images/empty-friends.png')} style={styles.emptyImage} resizeMode="contain" />
                 <Text style={styles.emptyText}>Pas encore d'amis</Text>
-                <Text style={styles.emptyHint}>Cherche tes amis par numéro ou pseudo</Text>
-                <Pressable style={styles.emptyBtn} onPress={() => setTab('search')}>
-                  <Text style={styles.emptyBtnText}>Ajouter des amis</Text>
-                </Pressable>
-                <Pressable style={styles.whatsappBtn} onPress={() => inviteViaWhatsApp()}>
-                  <Ionicons name="logo-whatsapp" size={16} color="#FFF" />
-                  <Text style={styles.whatsappBtnText}>Inviter via WhatsApp</Text>
+                <Text style={styles.emptyHint}>Cherche tes amis par pseudo ou numéro</Text>
+                <Pressable
+                  style={({ pressed }) => [pressed && styles.pressed]}
+                  onPress={() => setTab('search')}
+                >
+                  <LinearGradient
+                    colors={[...Gradients.cta]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.emptyBtn}
+                  >
+                    <Text style={styles.emptyBtnText}>Ajouter des amis</Text>
+                  </LinearGradient>
                 </Pressable>
               </View>
             )}
-            {friends.map((f, idx) => (
-              <AnimatedCard key={f.id} index={idx}>
-                <View style={styles.friendRow}>
-                <Avatar initials={initials(f.display_name)} color={Colors.primary} size={42} />
-                <View style={styles.friendInfo}>
-                  <Text style={styles.friendName}>{f.display_name}</Text>
-                  <Text style={styles.friendUsername}>@{f.username}</Text>
-                </View>
-                <View style={styles.friendStats}>
-                  <Text style={styles.friendBeers}>{f.total_beers} 🍺</Text>
-                  <Text style={styles.friendLevel}>Niv. {f.level}</Text>
-                </View>
-              </View>
-              </AnimatedCard>
-            ))}
+            {!loading && friends.map((f, idx) => renderFriendCard(f, idx))}
           </>
         )}
 
@@ -190,64 +283,103 @@ export default function FriendsScreen() {
                 <Text style={styles.emptyText}>Aucune demande en attente</Text>
               </View>
             )}
-            {requests.map((req) => (
-              <View key={req.id} style={styles.friendRow}>
-                <Avatar initials={initials(req.user.display_name)} color={Colors.accent} size={42} />
-                <View style={styles.friendInfo}>
-                  <Text style={styles.friendName}>{req.user.display_name}</Text>
-                  <Text style={styles.friendUsername}>@{req.user.username}</Text>
+            {requests.map((req, idx) => (
+              <AnimatedCard key={req.id} index={idx}>
+                <View style={styles.card}>
+                  <View style={styles.avatarSlot}>
+                    <Avatar initials={initials(req.user.display_name)} color={colorFor(req.user.display_name)} size={44} />
+                  </View>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardName}>{req.user.display_name}</Text>
+                    <Text style={styles.cardSub}>@{req.user.username}</Text>
+                  </View>
+                  <View style={styles.requestActions}>
+                    <Pressable
+                      style={({ pressed }) => [styles.ghostBtn, pressed && styles.pressed]}
+                      onPress={() => handleReject(req.id)}
+                    >
+                      <Text style={styles.ghostBtnText}>Refuser</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [pressed && styles.pressed]}
+                      onPress={() => handleAccept(req.id)}
+                    >
+                      <LinearGradient
+                        colors={[...Gradients.cta]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.acceptPill}
+                      >
+                        <Text style={styles.acceptText}>Accepter</Text>
+                      </LinearGradient>
+                    </Pressable>
+                  </View>
                 </View>
-                <View style={styles.requestActions}>
-                  <Pressable style={styles.acceptBtn} onPress={() => handleAccept(req.id)}>
-                    <Ionicons name="checkmark" size={18} color="#000" />
-                  </Pressable>
-                  <Pressable style={styles.rejectBtn} onPress={() => handleReject(req.id)}>
-                    <Ionicons name="close" size={18} color={Colors.text} />
-                  </Pressable>
-                </View>
-              </View>
+              </AnimatedCard>
             ))}
           </>
         )}
 
-        {/* Tab: Recherche */}
+        {/* Tab: Chercher */}
         {tab === 'search' && (
           <>
             <View style={styles.searchBox}>
+              <Ionicons name="search" size={18} color={Colors.textMuted} />
               <TextInput
                 style={styles.searchInput}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Numéro (+216...) ou pseudo"
+                placeholder="Pseudo ou numéro de téléphone"
                 placeholderTextColor={Colors.textMuted}
                 onSubmitEditing={handleSearch}
                 returnKeyType="search"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
-              <Pressable style={styles.searchBtn} onPress={handleSearch}>
-                {searchLoading ? (
-                  <ActivityIndicator color="#000" size="small" />
-                ) : (
-                  <Ionicons name="search" size={18} color="#000" />
-                )}
-              </Pressable>
+              {searchLoading && <ActivityIndicator color={Colors.primary} size="small" />}
             </View>
 
             {message ? <Text style={styles.message}>{message}</Text> : null}
 
-            {searchResults.map((r) => (
-              <View key={r.id} style={styles.friendRow}>
-                <Avatar initials={initials(r.display_name)} color={Colors.success} size={42} />
-                <View style={styles.friendInfo}>
-                  <Text style={styles.friendName}>{r.display_name}</Text>
-                  <Text style={styles.friendUsername}>@{r.username} — {r.total_beers} 🍺</Text>
+            {searchResults.map((r, idx) => (
+              <AnimatedCard key={r.id} index={idx}>
+                <View style={styles.card}>
+                  <View style={styles.avatarSlot}>
+                    <Avatar initials={initials(r.display_name)} color={colorFor(r.display_name)} size={44} />
+                  </View>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardName}>{r.display_name}</Text>
+                    <Text style={styles.cardSub} numberOfLines={1}>
+                      @{r.username} · {r.total_beers} 🍺
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [pressed && styles.pressed]}
+                    onPress={() => handleSendRequest(r.id)}
+                  >
+                    <LinearGradient
+                      colors={[...Gradients.cta]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.acceptPill}
+                    >
+                      <Text style={styles.acceptText}>Ajouter</Text>
+                    </LinearGradient>
+                  </Pressable>
                 </View>
-                <Pressable style={styles.addBtn} onPress={() => handleSendRequest(r.id)}>
-                  <Ionicons name="person-add" size={16} color="#000" />
-                </Pressable>
-              </View>
+              </AnimatedCard>
             ))}
           </>
         )}
+
+        {/* Inviter sur WhatsApp */}
+        <Pressable
+          style={({ pressed }) => [styles.whatsappBtn, pressed && styles.pressed]}
+          onPress={() => inviteViaWhatsApp()}
+        >
+          <Ionicons name="logo-whatsapp" size={20} color="#FFFFFF" />
+          <Text style={styles.whatsappText}>Inviter sur WhatsApp</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -258,176 +390,201 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  pressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    gap: 12,
+    paddingHorizontal: Spacing.screenX,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   backBtn: {
-    width: 32,
-    height: 32,
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     ...Fonts.screenTitle,
-    fontSize: 18,
+    fontSize: 28,
+    letterSpacing: 0.4,
   },
   tabs: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    gap: 4,
+    marginTop: 16,
+    marginHorizontal: Spacing.screenX,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 14,
+    padding: 4,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    height: 36,
   },
-  tabActive: {
-    borderBottomColor: Colors.primary,
+  tabIdle: {
+    flex: 1,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabPill: {
+    flex: 1,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: Glow.cta,
   },
   tabText: {
-    ...Fonts.body,
-    fontSize: 12,
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 13,
     color: Colors.textMuted,
   },
   tabTextActive: {
-    color: Colors.primary,
-    fontWeight: '700',
+    fontFamily: 'Outfit_800ExtraBold',
+    fontSize: 13,
+    color: Colors.onAmber,
   },
   scroll: { flex: 1 },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 30,
+    paddingHorizontal: Spacing.screenX,
+    paddingTop: 16,
+    gap: 10,
   },
   empty: {
     alignItems: 'center',
-    paddingTop: 40,
+    paddingVertical: 32,
     gap: 8,
   },
   emptyImage: { width: 150, height: 150, marginBottom: 8 },
-  emptyEmoji: {
-    fontSize: 48,
-  },
+  emptyEmoji: { fontSize: 48 },
   emptyText: {
     ...Fonts.bodyBold,
     fontSize: 16,
   },
   emptyHint: {
-    ...Fonts.label,
+    ...Fonts.small,
     fontSize: 13,
   },
   emptyBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    borderRadius: 999,
+    paddingHorizontal: 22,
+    paddingVertical: 11,
     marginTop: 12,
+    boxShadow: Glow.cta,
   },
-  whatsappBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#25D366', borderRadius: 10,
-    paddingHorizontal: 16, paddingVertical: 10, marginTop: 10,
-  },
-  whatsappBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
   emptyBtnText: {
-    color: '#000',
-    fontWeight: '700',
+    fontFamily: 'Outfit_800ExtraBold',
     fontSize: 14,
+    color: Colors.onAmber,
   },
-  friendRow: {
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 13,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    gap: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
-  friendInfo: {
-    flex: 1,
+  avatarSlot: {
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  friendName: {
+  cardInfo: { flex: 1 },
+  cardName: {
     ...Fonts.bodyBold,
   },
-  friendUsername: {
-    ...Fonts.label,
-    fontSize: 12,
+  cardSub: {
+    ...Fonts.small,
+    marginTop: 2,
   },
-  friendStats: {
-    alignItems: 'flex-end',
-  },
-  friendBeers: {
-    color: Colors.primary,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  friendLevel: {
-    ...Fonts.label,
-    fontSize: 10,
+  cardLive: {
+    color: Colors.cyan,
+    fontFamily: 'Outfit_700Bold',
   },
   requestActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  acceptBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
+  ghostBtn: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  rejectBtn: {
-    backgroundColor: Colors.surface2,
-    borderRadius: 8,
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
+  ghostBtnText: {
+    fontFamily: 'Outfit_700Bold',
+    fontSize: 12.5,
+    color: Colors.textMuted,
+  },
+  acceptPill: {
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    boxShadow: Glow.cta,
+  },
+  acceptText: {
+    fontFamily: 'Outfit_800ExtraBold',
+    fontSize: 12.5,
+    color: Colors.onAmber,
   },
   searchBox: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
-    marginBottom: 16,
+    height: 48,
+    paddingHorizontal: 16,
+    backgroundColor: Colors.surface2,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    marginBottom: 6,
   },
   searchInput: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 12,
+    height: '100%',
     color: Colors.text,
-    fontSize: 15,
-  },
-  searchBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    width: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontFamily: 'Outfit_400Regular',
+    fontSize: 14.5,
   },
   message: {
+    ...Fonts.small,
     color: Colors.primary,
-    fontSize: 13,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 4,
+  },
+  whatsappBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    height: 50,
+    borderRadius: 16,
+    backgroundColor: Colors.whatsapp,
+    marginTop: 4,
+    boxShadow: '0 4px 20px rgba(31,175,82,0.30)',
+  },
+  whatsappText: {
+    fontFamily: 'Outfit_800ExtraBold',
+    fontSize: 15,
+    color: '#FFFFFF',
   },
 });
