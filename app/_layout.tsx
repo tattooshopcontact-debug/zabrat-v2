@@ -23,17 +23,17 @@ export default function RootLayout() {
   // Force dark bg on web
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      document.documentElement.style.backgroundColor = '#0D0D0D';
-      document.body.style.backgroundColor = '#0D0D0D';
+      document.documentElement.style.backgroundColor = Colors.background;
+      document.body.style.backgroundColor = Colors.background;
       document.body.style.margin = '0';
       const root = document.getElementById('root');
       if (root) {
-        root.style.backgroundColor = '#0D0D0D';
+        root.style.backgroundColor = Colors.background;
         root.style.minHeight = '100vh';
       }
       const allDivs = document.querySelectorAll('#root > div');
       allDivs.forEach((div) => {
-        (div as HTMLElement).style.backgroundColor = '#0D0D0D';
+        (div as HTMLElement).style.backgroundColor = Colors.background;
       });
     }
   }, []);

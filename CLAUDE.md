@@ -15,21 +15,24 @@ Marché : Tunisie (La Marsa, Sidi Bou Said, Tunis) — Cible : 20-35 ans
 - Mapbox GL JS (carte dark-v11 sur web)
 - react-native-reanimated (animations)
 
-## Design System STRICT
+## Design System STRICT — « Nightlife Néon »
 
 | Élément | Valeur |
 |---|---|
-| Fond app | `#0D0D0D` |
-| Cartes | `#1A1A1A` |
-| Accent primaire | `#F5A623` (ambre) |
+| Fond app | `#0A0A0F` |
+| Cartes | `#15151C` |
+| Accent primaire | `#FF9500` (ambre) |
 | Accent secondaire | `#FF6B35` (orange) |
+| Cyan live | `#00E5FF` (rare — indicateurs live) |
 | Texte principal | `#FFFFFF` |
-| Texte secondaire | `#888888` |
-| Bordures | `#333333` |
+| Texte secondaire | `#9494A6` |
+| Bordures | `#2A2A35` |
 | Succès | `#4CAF50` |
 | Danger | `#F85149` |
 | Coins arrondis | 16-20px |
 | Dark mode | UNIQUEMENT |
+
+Glows via style `boxShadow` (RN 0.76+), dégradés via `expo-linear-gradient`, blur via `expo-blur`, fonts Barlow Condensed 700 (titres/chiffres) + Outfit (UI).
 
 ## Commandes
 

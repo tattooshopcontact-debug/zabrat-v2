@@ -21,7 +21,7 @@ import { RingAvatar } from '../../components/neon/RingAvatar';
 import { Colors, Fonts, Glow, Gradients, Radius, Spacing } from '../../constants/theme';
 
 /* ─── Helpers avatars (mêmes règles que feedService) ─── */
-const AVATAR_COLORS = ['#FF6B35', '#4CAF50', '#F5A623', '#E91E63', '#2196F3', '#9C27B0'];
+const AVATAR_COLORS = ['#FF6B35', '#4CAF50', Colors.primary, '#E91E63', '#2196F3', '#9C27B0'];
 
 function colorFor(name: string): string {
   let hash = 0;

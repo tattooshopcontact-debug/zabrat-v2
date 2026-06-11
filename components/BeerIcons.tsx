@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Colors } from '../constants/theme';
 
 // Icônes types de bière — style flat illustration matching le logo Zabrat
 // Chaque icône : fond circulaire + illustration emoji stylisée + label
@@ -9,10 +10,10 @@ interface BeerIconProps {
   active?: boolean;
 }
 
-const ICON_BG = '#272727';
-const ICON_BG_ACTIVE = 'rgba(245,166,35,0.15)';
-const ICON_BORDER = '#333333';
-const ICON_BORDER_ACTIVE = '#F5A623';
+const ICON_BG = Colors.surface2;
+const ICON_BG_ACTIVE = 'rgba(255,149,0,0.15)';
+const ICON_BORDER = Colors.border;
+const ICON_BORDER_ACTIVE = Colors.primary;
 
 function IconWrapper({ children, active, size = 64 }: BeerIconProps & { children: React.ReactNode }) {
   return (
@@ -32,7 +33,7 @@ export function BlondeIcon({ size = 64, active }: BeerIconProps) {
     <IconWrapper size={size} active={active}>
       <View style={[styles.mug, { width: size * 0.48, height: size * 0.42 }]}>
         <View style={[styles.mugFoam, { height: size * 0.1 }]} />
-        <View style={[styles.mugBody, { backgroundColor: '#F5A623' }]} />
+        <View style={[styles.mugBody, { backgroundColor: Colors.primary }]} />
         <View style={[styles.mugHandle, { width: size * 0.08, height: size * 0.2, right: -size * 0.1 }]} />
       </View>
       <Text style={[styles.label, { fontSize: size * 0.13 }]}>Blonde</Text>
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
     backgroundColor: ICON_BG_ACTIVE,
     borderWidth: 2,
     borderColor: ICON_BORDER_ACTIVE,
-    shadowColor: '#F5A623',
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -211,7 +212,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#F5A623',
+    backgroundColor: Colors.primary,
   },
   // Glass (Autre)
   glass: {

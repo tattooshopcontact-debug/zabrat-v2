@@ -5,8 +5,10 @@ import Animated, {
   withDelay, withSequence, Easing, runOnJS,
 } from 'react-native-reanimated';
 
+import { Colors } from '../constants/theme';
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const COLORS = ['#F5A623', '#FF6B35', '#4CAF50', '#E91E63', '#2196F3', '#FFD700', '#FF4444'];
+const COLORS = [Colors.primary, '#FF6B35', '#4CAF50', '#E91E63', '#2196F3', '#FFD700', '#FF4444'];
 const NUM_PARTICLES = 30;
 
 interface ConfettiProps {

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { getFriendIds } from './friendsService';
+import { Colors } from '../constants/theme';
 
 export interface LeaderboardRow {
   rank: number;
@@ -11,7 +12,7 @@ export interface LeaderboardRow {
   isMe: boolean;
 }
 
-const COLORS = ['#FF6B35', '#4CAF50', '#F5A623', '#E91E63', '#2196F3', '#9C27B0'];
+const COLORS = ['#FF6B35', '#4CAF50', Colors.primary, '#E91E63', '#2196F3', '#9C27B0'];
 
 function getColor(name: string): string {
   let hash = 0;

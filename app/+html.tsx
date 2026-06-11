@@ -1,7 +1,8 @@
 import { ScrollViewStyleReset } from 'expo-router/html';
 import type { PropsWithChildren } from 'react';
+import { Colors } from '../constants/theme';
 
-// Web-only: sets <html>, <body>, and #root backgrounds to #0D0D0D
+// Web-only: sets <html>, <body>, and #root backgrounds to Colors.background
 export default function Root({ children }: PropsWithChildren) {
   return (
     <html lang="fr">
@@ -19,11 +20,11 @@ export default function Root({ children }: PropsWithChildren) {
 
 const DARK_CSS = `
 html, body, #root {
-  background-color: #0D0D0D !important;
+  background-color: ${Colors.background} !important;
   margin: 0;
   padding: 0;
   min-height: 100%;
-  color: #FFFFFF;
+  color: ${Colors.text};
 }
 body {
   overflow: hidden;
