@@ -18,8 +18,6 @@ import NeonButton from '../components/neon/NeonButton';
 
 const CONFETTI_COLORS = ['#FF9500', '#FF6B35', '#00E5FF', '#FFFFFF'];
 
-type Visibility = 'amis' | 'prive';
-
 export default function LogBeerScreen() {
   const router = useRouter();
   const navigation = useNavigation();
@@ -29,7 +27,6 @@ export default function LogBeerScreen() {
   const [selectedType, setSelectedType] = useState<BeerType | null>(null);
   const [bars, setBars] = useState<Bar[]>([]);
   const [selectedBarId, setSelectedBarId] = useState<string | null>(null);
-  const [visibility, setVisibility] = useState<Visibility>('amis');
   const [logged, setLogged] = useState(false);
   const [loading, setLoading] = useState(false);
   const [earnedPoints, setEarnedPoints] = useState(0);
@@ -54,9 +51,11 @@ export default function LogBeerScreen() {
   // Chips bars : liste depuis mapService (pas de présélection sans géoloc)
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
     getBarsWithCheckins(user.id)
-      .then(setBars)
+      .then((data) => { if (!cancelled) setBars(data); })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [user?.id]);
 
   // Navigation sûre : back si possible, sinon redirect feed
@@ -112,8 +111,9 @@ export default function LogBeerScreen() {
         .then((s) => setTonightCount(Math.max(1, s.tonight)))
         .catch(() => {});
 
+      // Refresh profil silencieux : une erreur ici ne doit pas masquer le succès du log
       if (!devMode) {
-        await fetchProfile(user.id);
+        fetchProfile(user.id).catch(() => {});
       }
     } catch (err: any) {
       setError(err.message || 'Erreur lors du log');
@@ -236,27 +236,7 @@ export default function LogBeerScreen() {
           </>
         )}
 
-        {/* Toggle visibilité */}
-        <Text style={styles.sectionLabel}>Visibilité</Text>
-        <View style={styles.segmented}>
-          {([
-            ['amis', '👥 Mes amis'],
-            ['prive', '🔒 Privé'],
-          ] as [Visibility, string][]).map(([key, label]) => {
-            const active = visibility === key;
-            return (
-              <Pressable
-                key={key}
-                onPress={() => setVisibility(key)}
-                style={[styles.segment, active && styles.segmentActive]}
-              >
-                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
-                  {label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {/* TODO post-refonte : toggle visibilité quand beer_logs.visibility existera (migration + service + filtre feed) */}
 
         {/* CTA */}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -327,20 +307,6 @@ const styles = StyleSheet.create({
   },
   barChipText: { fontFamily: 'Outfit_700Bold', fontSize: 13.5, color: Colors.textMuted },
   barChipTextActive: { color: Colors.primary },
-
-  // Toggle visibilité
-  segmented: {
-    flexDirection: 'row', gap: 4, padding: 4, borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-  },
-  segment: {
-    flex: 1, height: 40, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  segmentActive: { backgroundColor: 'rgba(255,149,0,0.16)' },
-  segmentText: { fontFamily: 'Outfit_700Bold', fontSize: 13.5, color: Colors.textMuted },
-  segmentTextActive: { color: Colors.primary },
 
   // CTA
   cta: { marginTop: 30 },
