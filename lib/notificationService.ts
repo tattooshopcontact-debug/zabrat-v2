@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
+import { Colors } from '../constants/theme';
 
 // Types de notifications
 export const NOTIFICATION_TYPES = {
@@ -50,7 +51,7 @@ export async function registerPushToken(userId: string) {
         name: 'Zabrat',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#F5A623',
+        lightColor: Colors.primary,
       });
     }
 

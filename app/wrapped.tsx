@@ -1,59 +1,68 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  FadeInUp, useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing,
+} from 'react-native-reanimated';
 import { shareWrapped } from '../lib/shareService';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
-
-const BG = '#0D0D0D';
-const CARD = '#1A1A1A';
-const AMBER = '#F5A623';
-const MUTED = '#888888';
-const WHITE = '#FFFFFF';
+import { Colors, Fonts, Glow, Radius } from '../constants/theme';
+import ZabratLogo from '../components/neon/ZabratLogo';
+import NeonButton from '../components/neon/NeonButton';
+import GlassCard from '../components/neon/GlassCard';
 
 interface WrappedData {
-  month: string;
+  month: string;        // « mai 2026 » — utilisé par le share
+  monthTitle: string;   // « mai » — titre de l'écran
   totalBeers: number;
   favoriteBar: string;
   favBarVisits: number;
-  bestFriend: string;
-  bestFriendNights: number;
+  favoriteBeer: string;
+  favBeerCount: number;
+  bestNight: string;
+  bestNightCount: number;
   rarestBadge: string;
   rarestBadgeEmoji: string;
   avgRank: number;
-  liters: string;
 }
 
-function AnimStat({ index, emoji, value, label }: { index: number; emoji: string; value: string; label: string }) {
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(30);
+const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-  useEffect(() => {
-    const delay = 300 + index * 150;
-    opacity.value = withDelay(delay, withTiming(1, { duration: 400 }));
-    translateY.value = withDelay(delay, withTiming(0, { duration: 400, easing: Easing.out(Easing.cubic) }));
-  }, []);
-
-  const style = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
-  }));
-
+// Halo néon flou — sur web : vrai blur CSS, sur natif l'opacity basse suffit
+function Halo({ color, style }: { color: string; style: object }) {
   return (
-    <Animated.View style={[s.statCard, style]}>
-      <Text style={s.statEmoji}>{emoji}</Text>
-      <Text style={s.statValue}>{value}</Text>
-      <Text style={s.statLabel}>{label}</Text>
+    <View
+      pointerEvents="none"
+      style={[
+        s.halo,
+        { backgroundColor: color },
+        Platform.OS === 'web' ? ({ filter: 'blur(70px)' } as object) : null,
+        style,
+      ]}
+    />
+  );
+}
+
+function GlassRow({ index, label, value, sub }: { index: number; label: string; value: string; sub: string }) {
+  return (
+    <Animated.View entering={FadeInUp.delay(300 + index * 130).duration(400)}>
+      <GlassCard style={s.row}>
+        <Text style={s.rowLabel}>{label}</Text>
+        <View style={s.rowRight}>
+          <Text style={s.rowValue} numberOfLines={1}>{value}</Text>
+          <Text style={s.rowSub}>{sub}</Text>
+        </View>
+      </GlassCard>
     </Animated.View>
   );
 }
 
 export default function WrappedScreen() {
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
+  const user = useAuthStore((st) => st.user);
   const [data, setData] = useState<WrappedData | null>(null);
 
   // Animation du chiffre principal
@@ -76,10 +85,35 @@ export default function WrappedScreen() {
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     const monthName = now.toLocaleString('fr-FR', { month: 'long', year: 'numeric' });
+    const monthTitle = now.toLocaleString('fr-FR', { month: 'long' });
 
-    const { count: beerCount } = await supabase
-      .from('beer_logs').select('id', { count: 'exact', head: true })
+    const { data: logs } = await supabase
+      .from('beer_logs').select('beer_type, created_at')
       .eq('user_id', user.id).gte('created_at', monthStart);
+
+    const totalBeers = logs?.length ?? 0;
+
+    // Bière préférée (type le plus loggé ce mois)
+    let favoriteBeer = 'Aucune', favBeerCount = 0;
+    // Meilleur soir (record de 🍺 sur une journée)
+    let bestNight = '—', bestNightCount = 0;
+    if (logs && logs.length > 0) {
+      const beerCounts = new Map<string, number>();
+      const dayCounts = new Map<string, number>();
+      for (const log of logs as { beer_type: string | null; created_at: string }[]) {
+        const type = log.beer_type ?? 'Blonde';
+        beerCounts.set(type, (beerCounts.get(type) ?? 0) + 1);
+        const day = log.created_at.slice(0, 10);
+        dayCounts.set(day, (dayCounts.get(day) ?? 0) + 1);
+      }
+      const topBeer = [...beerCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (topBeer) { favoriteBeer = cap(topBeer[0]); favBeerCount = topBeer[1]; }
+      const topDay = [...dayCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (topDay) {
+        bestNight = cap(new Date(topDay[0]).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long' }));
+        bestNightCount = topDay[1];
+      }
+    }
 
     const { data: barVisits } = await supabase
       .from('bar_checkins').select('bar_id, bars!bar_checkins_bar_id_fkey(name)')
@@ -101,129 +135,152 @@ export default function WrappedScreen() {
       .from('user_badges').select('badges!user_badges_badge_id_fkey(name, icon, rarity)')
       .eq('user_id', user.id).gte('earned_at', monthStart).order('earned_at', { ascending: false });
 
-    let rarestBadge = 'Aucun', rarestBadgeEmoji = '🏅';
+    let rarestBadge = 'Aucun', rarestBadgeEmoji = '🥇';
     const rarityOrder = ['legendary', 'epic', 'rare', 'common', 'seasonal'];
     if (badges && badges.length > 0) {
       const sorted = (badges as any[]).sort((a, b) =>
         rarityOrder.indexOf(a.badges?.rarity ?? 'common') - rarityOrder.indexOf(b.badges?.rarity ?? 'common'));
       rarestBadge = sorted[0]?.badges?.name ?? 'Aucun';
-      rarestBadgeEmoji = sorted[0]?.badges?.icon ?? '🏅';
+      rarestBadgeEmoji = sorted[0]?.badges?.icon ?? '🥇';
     }
 
-    const totalBeers = beerCount ?? 0;
     setData({
-      month: monthName, totalBeers, favoriteBar, favBarVisits,
-      bestFriend: 'Aymen', bestFriendNights: 3,
-      rarestBadge, rarestBadgeEmoji, avgRank: 4,
-      liters: (totalBeers * 0.33).toFixed(1),
+      month: monthName, monthTitle, totalBeers,
+      favoriteBar, favBarVisits,
+      favoriteBeer, favBeerCount,
+      bestNight, bestNightCount,
+      rarestBadge, rarestBadgeEmoji,
+      avgRank: 4,
     });
   };
 
-  if (!data) return <View style={s.container} />;
+  const handleShare = () => {
+    if (data) shareWrapped(data.month, data.totalBeers, data.favoriteBar);
+  };
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
-      <Pressable style={s.closeBtn} onPress={() => router.back()}>
-        <Ionicons name="close" size={24} color={WHITE} />
+    <View style={s.container}>
+      {/* Fond nuit : dégradé + halos néon */}
+      <LinearGradient colors={['#1B1430', '#0A0A0F']} style={StyleSheet.absoluteFill} />
+      <Halo color={Colors.amber} style={{ top: -80, left: -90 }} />
+      <Halo color={Colors.accent} style={{ bottom: 60, right: -110 }} />
+      <Halo color={Colors.cyan} style={{ top: '38%', right: -60, opacity: 0.1 }} />
+
+      {/* Fermer (overlay story plein écran) */}
+      <Pressable style={s.closeBtn} onPress={() => router.back()} accessibilityRole="button">
+        <Ionicons name="close" size={18} color={Colors.text} />
       </Pressable>
 
-      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <Image source={require('../assets/images/app-icon.png')} style={s.logoImg} resizeMode="contain" />
-        <Text style={s.wrappedLabel}>Ton Zabrat de</Text>
-        <Text style={s.wrappedMonth}>{data.month}</Text>
+      {data && (
+        <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={s.header}>
+            <ZabratLogo size={30} />
+            <Text style={s.wrappedLabel}>Zabrat Wrapped</Text>
+          </View>
+          <Text style={s.title}>Ton mois de {data.monthTitle} 🍺</Text>
 
-        {/* Ligne dorée */}
-        <View style={s.divider} />
+          {/* Total géant */}
+          <Animated.View style={[s.mainStat, mainStyle]}>
+            <Text style={s.mainNumber}>{data.totalBeers}</Text>
+            <View style={s.mainUnit}>
+              <Text style={s.mainUnitTop}>bières</Text>
+              <Text style={s.mainUnitSub}>ce mois-ci</Text>
+            </View>
+          </Animated.View>
 
-        {/* Main stat animé */}
-        <Animated.View style={[s.mainStat, mainStyle]}>
-          <Text style={s.mainNumber}>{data.totalBeers}</Text>
-          <Text style={s.mainUnit}>bières 🍺</Text>
-        </Animated.View>
+          {/* Rows glass */}
+          <View style={s.rows}>
+            <GlassRow index={0} label="Bar préféré" value={data.favoriteBar}
+              sub={`${data.favBarVisits} soirée${data.favBarVisits > 1 ? 's' : ''}`} />
+            <GlassRow index={1} label="Bière préférée" value={data.favoriteBeer}
+              sub={`${data.favBeerCount} sur ${data.totalBeers}`} />
+            <GlassRow index={2} label="Meilleur soir" value={data.bestNight}
+              sub={`${data.bestNightCount} 🍺 — record`} />
 
-        {/* Stats grid — apparition progressive */}
-        <View style={s.statsGrid}>
-          <AnimStat index={0} emoji="📍" value={data.favoriteBar} label={`Bar préféré (${data.favBarVisits} visites)`} />
-          <AnimStat index={1} emoji="👥" value={data.bestFriend} label={`Meilleur ami (${data.bestFriendNights} soirs)`} />
-          <AnimStat index={2} emoji={data.rarestBadgeEmoji} value={data.rarestBadge} label="Badge le plus rare" />
-          <AnimStat index={3} emoji="🏆" value={`#${data.avgRank}`} label="Rang moyen" />
-        </View>
+            {/* 2 tiles côte à côte */}
+            <Animated.View entering={FadeInUp.delay(690).duration(400)} style={s.tilesRow}>
+              <View style={s.amberTile}>
+                <Text style={s.tileLabel}>Chez les amis</Text>
+                <Text style={s.tileRank}>#{data.avgRank}</Text>
+              </View>
+              <GlassCard style={s.badgeTile}>
+                <Text style={s.tileLabel}>Badge du mois</Text>
+                <Text style={s.tileBadge} numberOfLines={1}>{data.rarestBadgeEmoji} {data.rarestBadge}</Text>
+              </GlassCard>
+            </Animated.View>
+          </View>
 
-        {/* Fun stat */}
-        <View style={s.funStat}>
-          <Text style={s.funEmoji}>🍻</Text>
-          <Text style={s.funText}>{data.liters} litres bu ce mois</Text>
-        </View>
+          <View style={s.spacer} />
 
-        {/* Share buttons */}
-        <View style={s.shareRow}>
-          <Pressable style={s.shareBtn} onPress={() => {
-            if (data) shareWrapped(data.month, data.totalBeers, data.favoriteBar);
-          }}>
-            <Ionicons name="share-social" size={18} color="#000" />
-            <Text style={s.shareBtnText}>Partager</Text>
-          </Pressable>
-          <Pressable style={[s.shareBtn, s.whatsappBtn]} onPress={() => {
-            if (data) shareWrapped(data.month, data.totalBeers, data.favoriteBar);
-          }}>
-            <Ionicons name="logo-whatsapp" size={18} color="#FFF" />
-            <Text style={[s.shareBtnText, { color: '#FFF' }]}>WhatsApp</Text>
-          </Pressable>
-        </View>
-
-        <Text style={s.branding}>Track. Share. Compete.</Text>
-
-        <View style={{ height: 30 }} />
-      </ScrollView>
-    </SafeAreaView>
+          {/* Partage */}
+          <NeonButton title="Partager 📤" onPress={handleShare} />
+          <Text style={s.shareHint}>WhatsApp · Instagram</Text>
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
+const HALO_SIZE = 220;
+
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  closeBtn: { position: 'absolute', top: 50, right: 16, zIndex: 10, padding: 8 },
-  content: { paddingHorizontal: 24, paddingTop: 50, alignItems: 'center' },
+  container: { flex: 1, backgroundColor: Colors.background },
 
-  logoImg: { width: 60, height: 60, borderRadius: 16, marginBottom: 16 },
-  wrappedLabel: { fontSize: 14, color: MUTED, fontWeight: '500' },
-  wrappedMonth: { fontSize: 30, fontWeight: '900', color: AMBER, textTransform: 'capitalize', marginBottom: 12 },
-
-  divider: { width: 60, height: 2, backgroundColor: AMBER, borderRadius: 1, marginBottom: 24 },
-
-  // Main stat
-  mainStat: { alignItems: 'center', marginBottom: 32 },
-  mainNumber: { fontSize: 80, fontWeight: '900', color: AMBER, lineHeight: 88 },
-  mainUnit: { fontSize: 18, color: WHITE, fontWeight: '600', marginTop: 4 },
-
-  // Stats grid
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20, width: '100%' },
-  statCard: {
-    flex: 1, minWidth: '46%', backgroundColor: CARD, borderRadius: 18,
-    padding: 18, alignItems: 'center',
+  halo: {
+    position: 'absolute', width: HALO_SIZE, height: HALO_SIZE,
+    borderRadius: HALO_SIZE / 2, opacity: 0.16,
   },
-  statEmoji: { fontSize: 28, marginBottom: 8 },
-  statValue: { fontSize: 16, fontWeight: '800', color: WHITE, textAlign: 'center' },
-  statLabel: { fontSize: 10, color: MUTED, textAlign: 'center', marginTop: 4 },
 
-  // Fun stat
-  funStat: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: 'rgba(245,166,35,0.08)', borderRadius: 16,
-    padding: 18, width: '100%', marginBottom: 24,
-    borderWidth: 1, borderColor: 'rgba(245,166,35,0.2)',
+  closeBtn: {
+    position: 'absolute', top: 58, right: 20, zIndex: 10,
+    width: 36, height: 36, borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  funEmoji: { fontSize: 32 },
-  funText: { fontSize: 16, fontWeight: '700', color: WHITE },
 
-  // Share
-  shareRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  shareBtn: {
-    flex: 1, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: AMBER, borderRadius: 14, paddingVertical: 16,
+  content: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 92, paddingBottom: 46 },
+
+  // Header
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  wrappedLabel: { ...Fonts.label, letterSpacing: 3 },
+  title: { ...Fonts.display, fontSize: 32, marginTop: 18, letterSpacing: 0.4 },
+
+  // Total géant
+  mainStat: { flexDirection: 'row', alignItems: 'flex-end', gap: 14, marginTop: 8 },
+  mainNumber: {
+    ...Fonts.display, fontSize: 118, lineHeight: 112, color: Colors.amber,
+    ...Glow.textAmberBig,
   },
-  whatsappBtn: { backgroundColor: '#25D366' },
-  shareBtnText: { color: '#000', fontSize: 14, fontWeight: '700' },
+  mainUnit: { paddingBottom: 12 },
+  mainUnitTop: { ...Fonts.bodyBold, fontSize: 17 },
+  mainUnitSub: { ...Fonts.bodyBold, fontSize: 17, color: Colors.textMuted },
 
-  branding: { fontSize: 12, color: MUTED, fontWeight: '500', letterSpacing: 2 },
+  // Rows glass
+  rows: { gap: 9, marginTop: 24 },
+  row: {
+    padding: 14, borderRadius: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.09)',
+  },
+  rowLabel: { ...Fonts.label, letterSpacing: 1 },
+  rowRight: { alignItems: 'flex-end', maxWidth: '60%' },
+  rowValue: { ...Fonts.display, fontSize: 20 },
+  rowSub: { ...Fonts.small, fontSize: 12 },
+
+  // Tiles
+  tilesRow: { flexDirection: 'row', gap: 9 },
+  amberTile: {
+    flex: 1, padding: 14, borderRadius: 14,
+    backgroundColor: 'rgba(255,149,0,0.10)',
+    borderWidth: 1, borderColor: 'rgba(255,149,0,0.40)',
+    boxShadow: '0 0 18px rgba(255,149,0,0.18)',
+  },
+  badgeTile: { flex: 1.4, padding: 14, borderRadius: 14, justifyContent: 'center' },
+  tileLabel: { ...Fonts.label, fontSize: 11.5, letterSpacing: 1 },
+  tileRank: { ...Fonts.display, fontSize: 26, color: Colors.amber, ...Glow.textAmber, marginTop: 2 },
+  tileBadge: { ...Fonts.display, fontSize: 20, marginTop: 4 },
+
+  spacer: { flex: 1, minHeight: 24 },
+  shareHint: { ...Fonts.small, fontSize: 11.5, textAlign: 'center', marginTop: 10 },
 });

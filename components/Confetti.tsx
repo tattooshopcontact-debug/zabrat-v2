@@ -5,16 +5,19 @@ import Animated, {
   withDelay, withSequence, Easing, runOnJS,
 } from 'react-native-reanimated';
 
+import { Colors } from '../constants/theme';
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const COLORS = ['#F5A623', '#FF6B35', '#4CAF50', '#E91E63', '#2196F3', '#FFD700', '#FF4444'];
+const COLORS = [Colors.primary, '#FF6B35', '#4CAF50', '#E91E63', '#2196F3', '#FFD700', '#FF4444'];
 const NUM_PARTICLES = 30;
 
 interface ConfettiProps {
   visible: boolean;
   onComplete?: () => void;
+  colors?: string[]; // palette custom (défaut : palette historique)
 }
 
-function Particle({ index, onComplete }: { index: number; onComplete?: () => void }) {
+function Particle({ index, colors, onComplete }: { index: number; colors: string[]; onComplete?: () => void }) {
   const translateY = useSharedValue(0);
   const translateX = useSharedValue(0);
   const opacity = useSharedValue(1);
@@ -22,7 +25,7 @@ function Particle({ index, onComplete }: { index: number; onComplete?: () => voi
   const scale = useSharedValue(0);
 
   const startX = Math.random() * SCREEN_WIDTH;
-  const color = COLORS[index % COLORS.length];
+  const color = colors[index % colors.length];
   const size = 6 + Math.random() * 8;
   const isCircle = Math.random() > 0.5;
 
@@ -78,7 +81,7 @@ function Particle({ index, onComplete }: { index: number; onComplete?: () => voi
   );
 }
 
-export function Confetti({ visible, onComplete }: ConfettiProps) {
+export function Confetti({ visible, onComplete, colors = COLORS }: ConfettiProps) {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -95,7 +98,7 @@ export function Confetti({ visible, onComplete }: ConfettiProps) {
   return (
     <View style={styles.container} pointerEvents="none">
       {Array.from({ length: NUM_PARTICLES }).map((_, i) => (
-        <Particle key={i} index={i} onComplete={i === 0 ? handleComplete : undefined} />
+        <Particle key={i} index={i} colors={colors} onComplete={i === 0 ? handleComplete : undefined} />
       ))}
     </View>
   );

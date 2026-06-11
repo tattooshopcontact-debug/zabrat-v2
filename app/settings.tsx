@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Alert } from 're
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Fonts } from '../constants/theme';
+import { Colors, Fonts, Radius } from '../constants/theme';
 import { useAuthStore } from '../stores/authStore';
 
 type VisibilityMode = 'public' | 'friends' | 'ghost';
@@ -127,16 +127,17 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#1A1A1A', borderRadius: 14,
+    backgroundColor: Colors.surface, borderRadius: Radius.card,
     padding: 14, marginBottom: 6, gap: 10,
+    borderWidth: 1, borderColor: Colors.border,
   },
   rowIcon: { fontSize: 16, width: 24, textAlign: 'center' },
   rowLabel: { ...Fonts.body, flex: 1 },
   rowValue: { ...Fonts.label, fontSize: 12 },
   signOutBtn: {
-    backgroundColor: 'rgba(248,81,73,0.1)', borderRadius: 12,
+    backgroundColor: 'rgba(248,81,73,0.1)', borderRadius: Radius.tile,
     padding: 16, alignItems: 'center', marginTop: 32,
     borderWidth: 1, borderColor: Colors.danger,
   },
-  signOutText: { color: Colors.danger, fontWeight: '700', fontSize: 15 },
+  signOutText: { ...Fonts.bodyBold, color: Colors.danger },
 });

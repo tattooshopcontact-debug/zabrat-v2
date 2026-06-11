@@ -1,5 +1,6 @@
 // Mock data for all screens — used when devMode is true
 // TODO: SUPABASE — Replace all mock data with real queries
+import { Colors } from './theme';
 
 export const MOCK_FEED_ITEMS = [
   {
@@ -25,7 +26,7 @@ export const MOCK_FEED_ITEMS = [
   {
     id: '3',
     type: 'beer_log' as const,
-    user: { display_name: 'Mohamed', username: 'mo_z', initials: 'MO', color: '#F5A623' },
+    user: { display_name: 'Mohamed', username: 'mo_z', initials: 'MO', color: Colors.primary },
     beer_type: 'IPA',
     beer_brand: 'Celtia Craft',
     bar_name: 'Les Caves',
@@ -47,8 +48,8 @@ export const MOCK_FEED_ITEMS = [
 export const MOCK_LEADERBOARD = [
   { rank: 1, display_name: 'Aymen', initials: 'AY', color: '#FF6B35', beers: 18, trend: 'up' as const },
   { rank: 2, display_name: 'Ines', initials: 'IN', color: '#4CAF50', beers: 14, trend: 'same' as const },
-  { rank: 3, display_name: 'Mohamed', initials: 'MO', color: '#F5A623', beers: 12, trend: 'down' as const },
-  { rank: 4, display_name: 'Toi', initials: 'FA', color: '#F5A623', beers: 10, trend: 'up' as const, isMe: true },
+  { rank: 3, display_name: 'Mohamed', initials: 'MO', color: Colors.primary, beers: 12, trend: 'down' as const },
+  { rank: 4, display_name: 'Toi', initials: 'FA', color: Colors.primary, beers: 10, trend: 'up' as const, isMe: true },
   { rank: 5, display_name: 'Sarra', initials: 'SA', color: '#E91E63', beers: 8, trend: 'same' as const },
 ];
 
@@ -130,7 +131,7 @@ export const BEER_TYPES = [
 ];
 
 export const LEVEL_INFO: Record<number, { name: string; emoji: string; color: string; min: number; max: number }> = {
-  1: { name: 'Le Novice', emoji: '🥤', color: '#888888', min: 0, max: 9 },
+  1: { name: 'Le Novice', emoji: '🥤', color: Colors.textMuted, min: 0, max: 9 },
   2: { name: "L'Amateur", emoji: '🍺', color: '#CD7F32', min: 10, max: 29 },
   3: { name: "L'Habitué", emoji: '⭐', color: '#C0C0C0', min: 30, max: 74 },
   4: { name: 'Le Régulier', emoji: '🔥', color: '#FFD700', min: 75, max: 149 },
