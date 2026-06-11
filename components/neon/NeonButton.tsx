@@ -1,14 +1,14 @@
 import React from 'react';
-import { Pressable, Text, StyleSheet, ViewStyle } from 'react-native';
+import { Pressable, Text, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, Fonts, Gradients, Glow, Radius } from '../../constants/theme';
+import { Fonts, Gradients, Glow, Radius } from '../../constants/theme';
 
 type Props = {
   title: string;
   onPress: () => void;
   disabled?: boolean;
   hint?: string;            // ex. « Choisis ta bière d'abord » quand disabled
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 };
 
 export default function NeonButton({ title, onPress, disabled, hint, style }: Props) {
@@ -16,6 +16,8 @@ export default function NeonButton({ title, onPress, disabled, hint, style }: Pr
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       style={({ pressed }) => [
         { opacity: disabled ? 0.4 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] },
         !disabled && { boxShadow: Glow.cta },

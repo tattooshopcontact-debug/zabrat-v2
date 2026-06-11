@@ -17,6 +17,10 @@ const BEER_GLASSES: Record<BeerType, { glass: GlassShape; tint: string }> = {
   autre: { glass: 'autre', tint: '#9494A6' },
 };
 
+export function getBeerTint(type: BeerType): string {
+  return (BEER_GLASSES[type] ?? BEER_GLASSES.autre).tint;
+}
+
 export default function BeerGlass({ type, size = 44, selected = false }: {
   type: BeerType; size?: number; selected?: boolean;
 }) {

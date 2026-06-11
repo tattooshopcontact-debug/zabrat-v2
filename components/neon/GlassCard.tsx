@@ -1,10 +1,10 @@
 import React from 'react';
-import { StyleSheet, ViewStyle } from 'react-native';
+import { StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Colors, Radius } from '../../constants/theme';
 
 export default function GlassCard({ children, style, glow }: {
-  children: React.ReactNode; style?: ViewStyle; glow?: string;
+  children: React.ReactNode; style?: StyleProp<ViewStyle>; glow?: string;
 }) {
   return (
     <BlurView intensity={40} tint="dark" style={[styles.card, glow ? { boxShadow: glow } : null, style]}>
