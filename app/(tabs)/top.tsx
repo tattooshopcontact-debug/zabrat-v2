@@ -150,6 +150,12 @@ export default function TopScreen() {
 
   useEffect(() => { load(); setCountdown(getCountdown(tab)); }, [load, tab]);
 
+  // Tick du countdown toutes les 60s (écran laissé ouvert)
+  useEffect(() => {
+    const id = setInterval(() => setCountdown(getCountdown(tab)), 60_000);
+    return () => clearInterval(id);
+  }, [tab]);
+
   const data: LeaderboardRow[] = hasReal ? realData : MOCK_LEADERBOARD.map(r => ({
     rank: r.rank, user_id: String(r.rank), display_name: r.isMe ? 'Toi' : r.display_name,
     initials: r.initials, color: r.color, points: r.beers, isMe: !!r.isMe,
