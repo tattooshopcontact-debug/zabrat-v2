@@ -149,7 +149,8 @@ export default function ProfileScreen() {
       const { data } = await supabase
         .from('beer_logs').select('created_at')
         .eq('user_id', user.id).gte('created_at', weekStart.toISOString());
-      if (data && data.length > 0) {
+      if (data) {
+        // Semaine vide = vraies données à zéro (le mock ne sert qu'avant chargement/erreur)
         const counts = [0, 0, 0, 0, 0, 0, 0];
         for (const log of data) {
           const d = new Date(log.created_at);
