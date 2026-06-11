@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withSequence,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, TabBar, Glow, Gradients } from '../../constants/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -15,18 +16,29 @@ function LogButton() {
   const router = useRouter();
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const navigating = useRef(false);
 
   const handlePress = () => {
+    if (navigating.current) return;
+    navigating.current = true;
     scale.value = withSequence(
       withSpring(0.9, { damping: 10 }),
       withSpring(1, { damping: 8 }),
     );
-    setTimeout(() => router.push('/log-beer'), 120);
+    setTimeout(() => {
+      router.push('/log-beer');
+      navigating.current = false;
+    }, 120);
   };
 
   return (
     <View style={styles.logWrap}>
-      <AnimatedPressable onPress={handlePress} style={[styles.logButton, animStyle]}>
+      <AnimatedPressable
+        onPress={handlePress}
+        style={[styles.logButton, animStyle]}
+        accessibilityRole="button"
+        accessibilityLabel="Logger une bière"
+      >
         <LinearGradient colors={[...Gradients.cta]} style={styles.logGradient}>
           <Ionicons name="beer" size={30} color={Colors.onAmber} />
         </LinearGradient>
@@ -52,11 +64,12 @@ function TabIcon({ name, color, focused }: { name: keyof typeof Ionicons.glyphMa
 }
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, { height: TabBar.height + insets.bottom, paddingBottom: insets.bottom + 6 }],
         tabBarActiveTintColor: TabBar.activeColor,
         tabBarInactiveTintColor: TabBar.inactiveColor,
         tabBarLabelStyle: styles.tabLabel,
