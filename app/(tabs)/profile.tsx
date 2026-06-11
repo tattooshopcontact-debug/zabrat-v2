@@ -1,167 +1,303 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Image, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Circle } from 'react-native-svg';
+import { Colors, Fonts, Glow, Gradients, Radius } from '../../constants/theme';
 import { useAuthStore } from '../../stores/authStore';
 import { MOCK_BADGES, LEVEL_INFO } from '../../constants/mockData';
 import { Avatar } from '../../components/Avatar';
-import { BADGE_IMAGES, LEVEL_IMAGES } from '../../constants/badgeImages';
-import { uploadAvatar } from '../../lib/storageService';
 import { AnimatedBadge } from '../../components/AnimatedCard';
+import { uploadAvatar } from '../../lib/storageService';
 import { getUserBadges, type BadgeData } from '../../lib/badgeService';
+import { getUserStats, type UserStats } from '../../lib/statsService';
+import { getLeaderboard } from '../../lib/leaderboardService';
+import { supabase } from '../../lib/supabase';
+import StatNumber from '../../components/neon/StatNumber';
+import NeonButton from '../../components/neon/NeonButton';
+import { useTabBarPadding } from '../../components/neon/useTabBarPadding';
 
+/* ─── Anneau de progression XP (SVG, rotation -90°, dasharray ∝ % XP) ─── */
+const RING_SIZE = 118;
+const RING_STROKE = 5;
+
+function XPRing({ progress, children }: { progress: number; children: React.ReactNode }) {
+  const r = (RING_SIZE - 8) / 2;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.min(Math.max(progress, 0), 1);
+  return (
+    <View style={s.ringWrap}>
+      <Svg width={RING_SIZE} height={RING_SIZE} style={s.ringSvg}>
+        <Circle
+          cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={r}
+          fill="none" stroke={Colors.border} strokeWidth={RING_STROKE}
+        />
+        <Circle
+          cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={r}
+          fill="none" stroke={Colors.primary} strokeWidth={RING_STROKE}
+          strokeLinecap="round" strokeDasharray={`${c * clamped} ${c}`}
+        />
+      </Svg>
+      {children}
+    </View>
+  );
+}
+
+/* ─── Graphique hebdo ─── */
+type WeekDay = { d: string; v: number };
+const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const MOCK_WEEK: WeekDay[] = [
+  { d: 'L', v: 2 }, { d: 'M', v: 3 }, { d: 'M', v: 0 }, { d: 'J', v: 1 },
+  { d: 'V', v: 4 }, { d: 'S', v: 5 }, { d: 'D', v: 3 },
+];
+
+function WeekChart({ week }: { week: WeekDay[] }) {
+  const max = Math.max(...week.map(d => d.v), 1);
+  const total = week.reduce((a, d) => a + d.v, 0);
+  return (
+    <View style={s.card}>
+      <View style={s.cardHeader}>
+        <Text style={Fonts.label}>Cette semaine</Text>
+        <Text style={s.cardHeaderValue}>{total} 🍺</Text>
+      </View>
+      <View style={s.chartRow}>
+        {week.map((day, i) => (
+          <View key={i} style={s.chartCol}>
+            {day.v > 0 ? (
+              i >= 4 ? (
+                <LinearGradient
+                  colors={[...Gradients.cta]}
+                  start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+                  style={[s.bar, s.barStrong, { height: `${(day.v / max) * 100}%` }]}
+                />
+              ) : (
+                <View style={[s.bar, s.barPast, { height: `${(day.v / max) * 100}%` }]} />
+              )
+            ) : (
+              <View style={s.barEmpty} />
+            )}
+            <Text style={s.chartLabel}>{day.d}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/* ─── Tuile badge ─── */
+function BadgeTile({ badge }: { badge: BadgeData }) {
+  if (!badge.unlocked) {
+    return (
+      <View style={[s.badgeTile, s.badgeTileLocked]}>
+        <Ionicons name="lock-closed" size={22} color="#3A3A48" />
+        <Text style={[s.badgeName, s.badgeNameLocked]} numberOfLines={2}>{badge.name}</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={[s.badgeTile, s.badgeTileUnlocked]}>
+      <Text style={s.badgeEmoji}>{badge.icon}</Text>
+      <Text style={s.badgeName} numberOfLines={2}>{badge.name}</Text>
+    </View>
+  );
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+/* ─── Main ─── */
 export default function ProfileScreen() {
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
-  const level = LEVEL_INFO[user?.level ?? 1];
-  const pct = user
-    ? Math.min(((user.total_beers - level.min) / (level.max - level.min + 1)) * 100, 100)
-    : 0;
+  const user = useAuthStore(st => st.user);
+  const tabBarPadding = useTabBarPadding();
 
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [week, setWeek] = useState<WeekDay[] | null>(null);
+  const [rank, setRank] = useState<number | null>(null);
   const [badges, setBadges] = useState<BadgeData[]>([]);
   const [badgesLoaded, setBadgesLoaded] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!user) return;
+
+    // Stats globales (total, semaine, streak)
+    getUserStats(user.id).then(setStats).catch(() => {});
+
+    // Badges
     getUserBadges(user.id).then(data => {
       if (data.length > 0) { setBadges(data); setBadgesLoaded(true); }
     }).catch(() => {});
+
+    // Rang de la semaine (ligue amis)
+    getLeaderboard(user.id, 'week').then(rows => {
+      const me = rows.find(r => r.isMe);
+      if (me) setRank(me.rank);
+    }).catch(() => {});
+
+    // Logs de la semaine groupés par jour (L → D) pour le graphe
+    try {
+      const now = new Date();
+      const weekDay = now.getDay();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - (weekDay === 0 ? 6 : weekDay - 1));
+      weekStart.setHours(0, 0, 0, 0);
+      const { data } = await supabase
+        .from('beer_logs').select('created_at')
+        .eq('user_id', user.id).gte('created_at', weekStart.toISOString());
+      if (data && data.length > 0) {
+        const counts = [0, 0, 0, 0, 0, 0, 0];
+        for (const log of data) {
+          const d = new Date(log.created_at);
+          const idx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+          counts[idx]++;
+        }
+        setWeek(DAY_LABELS.map((d, i) => ({ d, v: counts[i] })));
+      }
+    } catch {}
   }, [user]);
 
-  const displayBadges = badgesLoaded ? badges : MOCK_BADGES.map(b => ({
+  useEffect(() => { load(); }, [load]);
+
+  // Niveau + XP (XP = bières totales, bornes LEVEL_INFO)
+  const levelNum = user?.level ?? 1;
+  const level = LEVEL_INFO[levelNum];
+  const nextLevel = LEVEL_INFO[Math.min(levelNum + 1, 7)];
+  const isMaxLevel = levelNum >= 7;
+  const total = stats?.total ?? user?.total_beers ?? 0;
+  const progress = Math.min((total - level.min) / (level.max - level.min + 1), 1);
+  const xpToNext = Math.max(nextLevel.min - total, 0);
+
+  const streak = user?.streak_current ?? 0;
+  const displayWeek = week ?? MOCK_WEEK;
+
+  const displayBadges: BadgeData[] = badgesLoaded ? badges : MOCK_BADGES.map(b => ({
     id: b.id, name: b.name, description: '', icon: b.emoji,
     category: b.category, rarity: 'common', unlocked: b.unlocked,
   }));
   const unlockedCount = displayBadges.filter(b => b.unlocked).length;
 
+  const pickAvatar = useCallback(() => {
+    if (Platform.OS !== 'web' || !user) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        const url = URL.createObjectURL(file);
+        await uploadAvatar(user.id, url);
+      }
+    };
+    input.click();
+  }, [user]);
+
+  if (!user) {
+    return (
+      <SafeAreaView style={s.container} edges={['top']}>
+        <Text style={s.emptyText}>Connecte-toi pour voir ton profil 🍺</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={s.container} edges={['top']}>
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Top bar */}
-        <View style={s.topBar}>
-          <View style={{ width: 36 }} />
-          <Text style={s.topTitle}>Profil</Text>
-          <Pressable style={s.settingsBtn} onPress={() => router.push('/settings')}>
-            <Ionicons name="settings-outline" size={18} color={Colors.textMuted} />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: tabBarPadding }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Réglages */}
+        <View style={s.settingsRow}>
+          <Pressable
+            onPress={() => router.push('/settings')}
+            accessibilityRole="button"
+            accessibilityLabel="Réglages"
+            style={({ pressed }) => [s.settingsBtn, pressed && { transform: [{ scale: 0.94 }] }]}
+          >
+            <Ionicons name="settings-outline" size={19} color={Colors.textMuted} />
           </Pressable>
         </View>
 
-        {/* Avatar + name */}
-        <View style={s.profileCard}>
-          <Pressable style={s.avatarGlow} onPress={async () => {
-            if (Platform.OS === 'web') {
-              // Web: file input
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = 'image/*';
-              input.onchange = async (e: any) => {
-                const file = e.target.files?.[0];
-                if (file && user) {
-                  const url = URL.createObjectURL(file);
-                  await uploadAvatar(user.id, url);
-                }
-              };
-              input.click();
-            }
-          }}>
-            {user?.avatar_url ? (
-              <Image source={{ uri: user.avatar_url }} style={s.avatarImage} />
-            ) : (
-              <Avatar initials="FA" color={Colors.primary} size={72} />
-            )}
+        {/* Hero : avatar + anneau XP */}
+        <View style={s.hero}>
+          <Pressable onPress={pickAvatar} accessibilityRole="button" accessibilityLabel="Changer mon avatar">
+            <XPRing progress={progress}>
+              {user.avatar_url ? (
+                <Image source={{ uri: user.avatar_url }} style={s.avatarImage} />
+              ) : (
+                <Avatar initials={getInitials(user.display_name)} color={Colors.accent} size={94} />
+              )}
+            </XPRing>
             <View style={s.avatarEditBadge}>
               <Ionicons name="camera" size={12} color="#FFF" />
             </View>
           </Pressable>
-          <Text style={s.name}>{user?.display_name ?? 'User'}</Text>
-          <Text style={s.username}>@{user?.username ?? 'user'}</Text>
-
-          {/* Level badge with emblem */}
-          <View style={s.levelRow}>
-            {LEVEL_IMAGES[user?.level ?? 1] && (
-              <Image source={LEVEL_IMAGES[user?.level ?? 1]} style={s.levelEmblem} resizeMode="contain" />
-            )}
-            <View style={s.levelBadge}>
-              <Text style={s.levelEmoji}>{level.emoji}</Text>
-              <Text style={s.levelName}>{level.name}</Text>
-              <Text style={s.levelNum}>Niv. {user?.level}</Text>
-            </View>
+          <Text style={s.heroName}>{user.display_name}</Text>
+          <View style={s.levelPill}>
+            <Text style={s.levelPillText}>Niv. {levelNum} · {level.name} {level.emoji}</Text>
           </View>
-
-          {/* XP bar */}
-          <View style={s.xpBarBg}>
-            <View style={[s.xpBarFill, { width: `${pct}%` }]} />
-          </View>
-          <Text style={s.xpText}>{Math.round(pct)}% vers le niveau suivant</Text>
+          <Text style={s.xpText}>
+            {isMaxLevel ? 'Niveau max atteint 🏆' : `${xpToNext} XP avant « ${nextLevel.name} »`}
+          </Text>
         </View>
 
-        {/* Quick stats */}
-        <View style={s.quickRow}>
-          <View style={s.quickItem}>
-            <Text style={s.quickValue}>{user?.total_beers ?? 0}</Text>
-            <Text style={s.quickEmoji}>🍺</Text>
-            <Text style={s.quickLabel}>Total</Text>
+        {/* 3 chiffres géants */}
+        <View style={s.statsRow}>
+          <View style={s.statCell}>
+            <StatNumber value={`${total}`} label="bières au total" amber />
           </View>
-          <View style={s.quickDivider} />
-          <View style={s.quickItem}>
-            <Text style={s.quickValue}>12</Text>
-            <Text style={s.quickEmoji}>📍</Text>
-            <Text style={s.quickLabel}>Bars</Text>
+          <View style={[s.statCell, s.statCellBorder]}>
+            <StatNumber value={`${streak} 🔥`} label="streak" />
           </View>
-          <View style={s.quickDivider} />
-          <Pressable style={s.quickItem} onPress={() => router.push('/friends')}>
-            <Text style={s.quickValue}>8</Text>
-            <Text style={s.quickEmoji}>👥</Text>
-            <Text style={s.quickLabel}>Amis →</Text>
-          </Pressable>
+          <View style={[s.statCell, s.statCellBorder]}>
+            <StatNumber value={rank != null ? `#${rank}` : '—'} label="cette semaine" />
+          </View>
         </View>
 
-        {/* Badges */}
-        <View style={s.section}>
-          <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>🏅 Mes Badges</Text>
-            <View style={s.badgeCountBadge}>
-              <Text style={s.badgeCountText}>{unlockedCount}/{displayBadges.length}</Text>
+        <View style={s.body}>
+          {/* Graphique hebdo */}
+          <WeekChart week={displayWeek} />
+
+          {/* Badges */}
+          <View style={s.card}>
+            <View style={s.cardHeader}>
+              <Text style={Fonts.label}>Badges</Text>
+              <Text style={s.badgeCount}>
+                {unlockedCount}
+                <Text style={s.badgeCountTotal}>/{displayBadges.length}</Text>
+              </Text>
             </View>
-          </View>
-          <View style={s.badgeGrid}>
-            {displayBadges.map((badge, idx) => {
-              const badgeImage = badge.unlocked ? BADGE_IMAGES[badge.name] : null;
-              return (
-                <AnimatedBadge key={badge.id} index={idx}>
-                  <View style={[s.badgeSlot, badge.unlocked && s.badgeUnlocked, !badge.unlocked && s.badgeLocked]}>
-                    {badgeImage ? (
-                      <Image source={badgeImage} style={s.badgeImage} resizeMode="contain" />
-                    ) : (
-                      <Text style={[s.badgeEmoji, !badge.unlocked && { opacity: 0.3 }]}>
-                        {badge.unlocked ? (badge as any).emoji ?? badge.icon : '🔒'}
-                      </Text>
-                    )}
-                    <Text style={[s.badgeName, !badge.unlocked && { opacity: 0.3 }]} numberOfLines={1}>
-                      {badge.name}
-                    </Text>
-                  </View>
+            <View style={s.badgeGrid}>
+              {displayBadges.map((badge, idx) => (
+                <AnimatedBadge key={badge.id} index={idx} style={s.badgeCell}>
+                  <BadgeTile badge={badge} />
                 </AnimatedBadge>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Wrapped */}
-        <Pressable style={s.wrappedCard} onPress={() => router.push('/wrapped')}>
-          <View style={s.wrappedLeft}>
-            <Text style={s.wrappedEmoji}>🎵</Text>
-            <View>
-              <Text style={s.wrappedTitle}>Mon Zabrat de Mars 2026</Text>
-              <Text style={s.wrappedSub}>Ton résumé du mois est prêt !</Text>
+              ))}
             </View>
           </View>
-          <Text style={s.wrappedCta}>Voir →</Text>
-        </Pressable>
 
-        <View style={{ height: 30 }} />
+          {/* Boutons */}
+          <View style={s.buttonsRow}>
+            <NeonButton
+              title="Mon Wrapped 🎁"
+              onPress={() => router.push('/wrapped')}
+              style={{ flex: 1.2 }}
+            />
+            <Pressable
+              onPress={() => router.push('/friends')}
+              accessibilityRole="button"
+              style={({ pressed }) => [s.secondaryBtn, pressed && { transform: [{ scale: 0.96 }] }]}
+            >
+              <Ionicons name="people" size={18} color={Colors.primary} />
+              <Text style={s.secondaryBtnText}>Mes amis</Text>
+            </Pressable>
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -169,119 +305,110 @@ export default function ProfileScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 24 },
+  emptyText: { ...Fonts.small, textAlign: 'center', paddingVertical: 40 },
 
-  // Top bar
-  topBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 12,
-  },
-  topTitle: { fontSize: 16, fontWeight: '700', color: Colors.text },
+  // Réglages
+  settingsRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20, paddingTop: 6 },
   settingsBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center',
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: Colors.surface,
     borderWidth: 1, borderColor: Colors.border,
+    alignItems: 'center', justifyContent: 'center',
   },
 
-  // Profile card
-  profileCard: {
-    alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20,
-    marginHorizontal: 16, marginBottom: 16,
-    backgroundColor: Colors.surface, borderRadius: 24,
-    borderWidth: 1, borderColor: Colors.border, paddingTop: 24,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15, shadowRadius: 16, elevation: 5,
+  // Hero
+  hero: { alignItems: 'center', marginTop: -6 },
+  ringWrap: {
+    width: RING_SIZE, height: RING_SIZE, borderRadius: RING_SIZE / 2,
+    alignItems: 'center', justifyContent: 'center',
+    boxShadow: Glow.card,
   },
-  avatarGlow: {
-    borderRadius: 44, padding: 4,
-    borderWidth: 2, borderColor: 'rgba(245,166,35,0.4)',
-    shadowColor: '#F5A623', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3, shadowRadius: 16,
-    marginBottom: 12, position: 'relative',
-  },
-  avatarImage: {
-    width: 72, height: 72, borderRadius: 36,
-  },
+  ringSvg: { position: 'absolute', transform: [{ rotate: '-90deg' }] },
+  avatarImage: { width: 94, height: 94, borderRadius: 47 },
   avatarEditBadge: {
-    position: 'absolute', bottom: 0, right: 0,
+    position: 'absolute', bottom: 4, right: 4,
     width: 24, height: 24, borderRadius: 12,
-    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: '#0D0D0D',
+    backgroundColor: Colors.primary,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: Colors.background,
   },
-  name: { fontSize: 24, fontWeight: '800', color: Colors.text },
-  username: { fontSize: 13, color: Colors.textMuted, marginTop: 2 },
-
-  levelRow: { marginTop: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  levelEmblem: { width: 44, height: 44 },
-  levelBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(245,166,35,0.10)', borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderWidth: 1, borderColor: 'rgba(245,166,35,0.25)',
+  heroName: { ...Fonts.display, fontSize: 28, marginTop: 12, letterSpacing: 0.4 },
+  levelPill: {
+    marginTop: 7, paddingHorizontal: 14, paddingVertical: 5,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255,149,0,0.12)',
+    borderWidth: 1, borderColor: 'rgba(255,149,0,0.4)',
+    boxShadow: '0 0 14px rgba(255,149,0,0.2)',
   },
-  levelEmoji: { fontSize: 18 },
-  levelName: { color: Colors.primary, fontWeight: '700', fontSize: 13 },
-  levelNum: { color: Colors.textMuted, fontSize: 11 },
+  levelPillText: { fontFamily: 'Outfit_800ExtraBold', fontSize: 13, color: Colors.primary },
+  xpText: { ...Fonts.small, fontFamily: 'Outfit_600SemiBold', fontSize: 11.5, marginTop: 7 },
 
-  xpBarBg: {
-    width: '80%', height: 8, backgroundColor: Colors.surface2,
-    borderRadius: 4, overflow: 'hidden',
-  },
-  xpBarFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 4 },
-  xpText: { fontSize: 10, color: Colors.textMuted, marginTop: 6 },
+  // 3 chiffres géants
+  statsRow: { flexDirection: 'row', paddingHorizontal: 20, marginTop: 22 },
+  statCell: { flex: 1, alignItems: 'center' },
+  statCellBorder: { borderLeftWidth: 1, borderLeftColor: Colors.border },
 
-  // Quick stats
-  quickRow: {
-    flexDirection: 'row', marginHorizontal: 16, marginBottom: 20,
-    backgroundColor: Colors.surface, borderRadius: 18, padding: 18,
+  // Corps
+  body: { paddingHorizontal: 20, marginTop: 22, gap: 12 },
+  card: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.card,
     borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: 18, paddingTop: 18, paddingBottom: 12,
   },
-  quickItem: { flex: 1, alignItems: 'center' },
-  quickDivider: { width: 1, backgroundColor: Colors.border },
-  quickValue: { fontSize: 24, fontWeight: '900', color: Colors.primary },
-  quickEmoji: { fontSize: 14, marginTop: 2 },
-  quickLabel: { fontSize: 10, color: Colors.textMuted, fontWeight: '600', marginTop: 2 },
+  cardHeader: {
+    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  cardHeaderValue: { fontFamily: 'Outfit_700Bold', fontSize: 12.5, color: Colors.textMuted },
+
+  // Graphique hebdo
+  chartRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, height: 92 },
+  chartCol: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'flex-end', gap: 7 },
+  bar: { width: '100%', maxWidth: 26, borderRadius: 6 },
+  barStrong: { boxShadow: '0 0 14px rgba(255,149,0,0.43)' },
+  barPast: { backgroundColor: 'rgba(255,149,0,0.35)' },
+  barEmpty: { width: '100%', maxWidth: 26, height: 3, borderRadius: 3, backgroundColor: Colors.border },
+  chartLabel: { fontFamily: 'Outfit_700Bold', fontSize: 11, color: Colors.textMuted },
 
   // Badges
-  section: { paddingHorizontal: 16, marginBottom: 20 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.text },
-  badgeCountBadge: {
-    backgroundColor: Colors.surface, borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 3,
+  badgeCount: { fontFamily: 'Outfit_800ExtraBold', fontSize: 12.5, color: Colors.primary },
+  badgeCountTotal: { color: Colors.textMuted },
+  badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingBottom: 6 },
+  badgeCell: { width: '20%', padding: 3 },
+  badgeTile: {
+    alignItems: 'center', gap: 7,
+    paddingTop: 14, paddingBottom: 11, paddingHorizontal: 4,
+    borderRadius: Radius.tile, minHeight: 76,
+  },
+  badgeTileUnlocked: {
+    backgroundColor: 'rgba(255,149,0,0.12)',
+    borderWidth: 1, borderColor: 'rgba(255,149,0,0.4)',
+    boxShadow: '0 0 16px rgba(255,149,0,0.16)',
+  },
+  badgeTileLocked: {
+    backgroundColor: Colors.surface2,
     borderWidth: 1, borderColor: Colors.border,
   },
-  badgeCountText: { fontSize: 12, color: Colors.primary, fontWeight: '700' },
+  badgeEmoji: {
+    fontSize: 22, lineHeight: 26,
+    textShadowColor: 'rgba(255,149,0,0.6)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
+  badgeName: {
+    fontFamily: 'Outfit_700Bold', fontSize: 10.5, color: Colors.text,
+    textAlign: 'center', lineHeight: 13,
+  },
+  badgeNameLocked: { color: '#3A3A48' },
 
-  badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  badgeSlot: {
-    width: '22.5%', aspectRatio: 0.82,
-    backgroundColor: Colors.surface, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center', padding: 6,
-    borderWidth: 1, borderColor: Colors.border,
+  // Boutons
+  buttonsRow: { flexDirection: 'row', gap: 10 },
+  secondaryBtn: {
+    flex: 1, height: 62, borderRadius: Radius.cta,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: 'rgba(255,149,0,0.12)',
+    borderWidth: 1, borderColor: 'rgba(255,149,0,0.4)',
   },
-  badgeUnlocked: {
-    borderColor: 'rgba(76,175,80,0.3)',
-    shadowColor: '#4CAF50', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1, shadowRadius: 8,
-  },
-  badgeLocked: { opacity: 0.4 },
-  badgeImage: { width: 40, height: 40, marginBottom: 2 },
-  badgeEmoji: { fontSize: 24, marginBottom: 3 },
-  badgeName: { fontSize: 8, color: Colors.text, textAlign: 'center', fontWeight: '600' },
-
-  // Wrapped
-  wrappedCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: 16, backgroundColor: Colors.surface, borderRadius: 18,
-    padding: 18, borderWidth: 1, borderColor: Colors.primary,
-    shadowColor: '#F5A623', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.08, shadowRadius: 12,
-  },
-  wrappedLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  wrappedEmoji: { fontSize: 28 },
-  wrappedTitle: { fontSize: 14, fontWeight: '700', color: Colors.text },
-  wrappedSub: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
-  wrappedCta: { color: Colors.primary, fontWeight: '800', fontSize: 14 },
+  secondaryBtnText: { fontFamily: 'Outfit_800ExtraBold', fontSize: 15, color: Colors.primary },
 });
