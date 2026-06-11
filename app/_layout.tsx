@@ -5,6 +5,11 @@ import { View, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { Colors } from '../constants/theme';
 import { DevBadge } from '../components/DevBadge';
 import { useAuthStore } from '../stores/authStore';
+import { useFonts } from 'expo-font';
+import { BarlowCondensed_700Bold } from '@expo-google-fonts/barlow-condensed';
+import {
+  Outfit_400Regular, Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold, Outfit_800ExtraBold,
+} from '@expo-google-fonts/outfit';
 
 export default function RootLayout() {
   const initialize = useAuthStore((s) => s.initialize);
@@ -29,6 +34,12 @@ export default function RootLayout() {
       });
     }
   }, []);
+
+  const [fontsLoaded] = useFonts({
+    BarlowCondensed_700Bold,
+    Outfit_400Regular, Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold, Outfit_800ExtraBold,
+  });
+  if (!fontsLoaded) return null; // le splash screen reste affiché
 
   if (isLoading) {
     return (
