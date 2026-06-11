@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
-  FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withTiming,
+  FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withTiming, cancelAnimation,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +27,7 @@ function Caret({ height }: { height: number }) {
 
   useEffect(() => {
     opacity.value = withRepeat(withTiming(0, { duration: 550 }), -1, true);
+    return () => cancelAnimation(opacity);
   }, [opacity]);
 
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
