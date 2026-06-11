@@ -1,58 +1,63 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, ActivityIndicator, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing } from 'react-native-reanimated';
-import { Colors, Fonts } from '../constants/theme';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { Colors, Fonts, Glow, Gradients, Radius } from '../constants/theme';
 import { BEER_TYPES } from '../constants/mockData';
 import { useAuthStore } from '../stores/authStore';
 import { logBeer } from '../lib/beerService';
+import { getBarsWithCheckins, Bar } from '../lib/mapService';
+import { getUserStats } from '../lib/statsService';
 import { Confetti } from '../components/Confetti';
-import { BEER_ICON_MAP } from '../components/BeerIcons';
+import BeerGlass, { BeerType } from '../components/neon/BeerGlass';
+import NeonButton from '../components/neon/NeonButton';
+
+const CONFETTI_COLORS = ['#FF9500', '#FF6B35', '#00E5FF', '#FFFFFF'];
+
+type Visibility = 'amis' | 'prive';
 
 export default function LogBeerScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { user, devMode, fetchProfile } = useAuthStore();
-  const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [barName, setBarName] = useState('');
+
+  const [selectedType, setSelectedType] = useState<BeerType | null>(null);
+  const [bars, setBars] = useState<Bar[]>([]);
+  const [selectedBarId, setSelectedBarId] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<Visibility>('amis');
   const [logged, setLogged] = useState(false);
   const [loading, setLoading] = useState(false);
   const [earnedPoints, setEarnedPoints] = useState(0);
+  const [tonightCount, setTonightCount] = useState(1);
   const [error, setError] = useState('');
   const [showConfetti, setShowConfetti] = useState(false);
-  const [noTypeError, setNoTypeError] = useState(false);
+  // logBeer() ne retourne pas (encore) de badge fraîchement débloqué — le chip reste prêt.
+  const [unlockedBadge] = useState<string | null>(null);
 
-  // Animation remplissage verre
-  const fillHeight = useSharedValue(0);
-  const glassScale = useSharedValue(1);
-  const fillColor = useSharedValue('#F5A623');
-
-  const BEER_COLORS: Record<string, string> = {
-    blonde: '#F5A623', blanche: '#FFD54F', brune: '#5D4037',
-    ipa: '#E65100', craft: '#6D4C41', autre: '#9E9E9E',
-  };
-
-  const selectType = (key: string) => {
-    setSelectedType(key);
-    setNoTypeError(false);
-    // Animation
-    fillHeight.value = 0;
-    glassScale.value = withSpring(1.05, { damping: 8 }, () => {
-      glassScale.value = withSpring(1);
-    });
-    fillHeight.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
-  };
-
-  const fillStyle = useAnimatedStyle(() => ({
-    height: `${fillHeight.value * 100}%`,
-    backgroundColor: BEER_COLORS[selectedType ?? 'blonde'] ?? '#F5A623',
+  // Pop de la chope sur l'écran succès : scale 0.3 → 1 (spring)
+  const popScale = useSharedValue(0.3);
+  const popStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: popScale.value }],
   }));
 
-  const glassStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: glassScale.value }],
-  }));
+  useEffect(() => {
+    if (logged) {
+      popScale.value = withSpring(1, { damping: 7 });
+    }
+  }, [logged]);
+
+  // Chips bars : liste depuis mapService (pas de présélection sans géoloc)
+  useEffect(() => {
+    if (!user) return;
+    getBarsWithCheckins(user.id)
+      .then(setBars)
+      .catch(() => {});
+  }, [user?.id]);
 
   // Navigation sûre : back si possible, sinon redirect feed
   const safeGoBack = () => {
@@ -72,20 +77,15 @@ export default function LogBeerScreen() {
     }
   };
 
-  const handleLog = async () => {
-    // Bug #6 : validation avec feedback
-    if (!selectedType) {
-      setNoTypeError(true);
-      return;
-    }
-    setNoTypeError(false);
+  const handleSubmit = async () => {
+    if (!selectedType || loading) return;
 
     if (!user) {
+      setEarnedPoints(1);
+      setTonightCount(1);
       setLogged(true);
       setShowConfetti(true);
-      setEarnedPoints(1);
       triggerHaptic();
-      setTimeout(() => safeGoBack(), 2000);
       return;
     }
 
@@ -93,10 +93,13 @@ export default function LogBeerScreen() {
     setError('');
 
     try {
+      const selectedBar = bars.find((b) => b.id === selectedBarId);
       const result = await logBeer({
         userId: user.id,
         beerType: selectedType,
-        barName: barName || undefined,
+        barName: selectedBar?.name,
+        latitude: selectedBar?.latitude,
+        longitude: selectedBar?.longitude,
       });
 
       setEarnedPoints(result.points);
@@ -104,185 +107,275 @@ export default function LogBeerScreen() {
       setShowConfetti(true);
       triggerHaptic();
 
+      // Compteur réel « ce soir » (non bloquant)
+      getUserStats(user.id)
+        .then((s) => setTonightCount(Math.max(1, s.tonight)))
+        .catch(() => {});
+
       if (!devMode) {
         await fetchProfile(user.id);
       }
-
-      // Bug #1 : utiliser safeGoBack au lieu de router.back()
-      setTimeout(() => safeGoBack(), 2000);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du log');
       setLoading(false);
     }
   };
 
+  // ── Écran succès ─────────────────────────────────────────
   if (logged) {
     return (
-      <View style={[styles.container, styles.successContainer]}>
-        <Confetti visible={showConfetti} />
-        <Text style={styles.successEmoji}>🍺</Text>
-        <Text style={styles.successText}>Loggé !</Text>
-        <Text style={styles.successSub}>
-          +{earnedPoints} point{earnedPoints > 1 ? 's' : ''} ajouté{earnedPoints > 1 ? 's' : ''}
-        </Text>
-        {/* Bouton de secours si la redirection automatique échoue */}
-        <Pressable style={styles.backToFeed} onPress={() => router.replace('/(tabs)/feed')}>
-          <Text style={styles.backToFeedText}>← Retour au feed</Text>
-        </Pressable>
+      <View style={styles.overlay}>
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+        <Confetti visible={showConfetti} colors={CONFETTI_COLORS} />
+        <View style={styles.successContent}>
+          <Animated.View style={popStyle}>
+            <BeerGlass type={selectedType ?? 'blonde'} size={120} selected />
+          </Animated.View>
+          <Text style={styles.plusOne}>+1 !</Text>
+          <Text style={styles.successCount}>T'en es à {tonightCount} ce soir 🔥</Text>
+          <View style={styles.rewardRow}>
+            <Text style={styles.pointsChip}>+{earnedPoints} pts</Text>
+            {unlockedBadge && (
+              <Text style={styles.badgeChip}>🏅 Badge « {unlockedBadge} » débloqué</Text>
+            )}
+          </View>
+        </View>
+        <View style={[styles.successCta, { bottom: insets.bottom + 40 }]}>
+          <NeonButton title="Retour à la soirée" onPress={safeGoBack} />
+        </View>
       </View>
     );
   }
 
+  // ── Modal LOG ────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={safeGoBack} style={styles.closeBtn}>
-          <Ionicons name="close" size={24} color={Colors.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>🍺 Nouvelle bière</Text>
-        <View style={{ width: 32 }} />
-      </View>
+    <View style={styles.overlay}>
+      <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 40 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>C'est quoi ce soir ?</Text>
+          <Pressable
+            onPress={safeGoBack}
+            style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Fermer"
+          >
+            <Ionicons name="close" size={20} color={Colors.textMuted} />
+          </Pressable>
+        </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {/* Verre animé */}
-        {selectedType && (
-          <Animated.View style={[styles.glassContainer, glassStyle]}>
-            <View style={styles.glass}>
-              <View style={styles.glassFoam} />
-              <View style={styles.glassInner}>
-                <Animated.View style={[styles.glassFill, fillStyle]} />
-              </View>
-            </View>
-            <Text style={styles.glassLabel}>{BEER_TYPES.find(t => t.key === selectedType)?.label}</Text>
-          </Animated.View>
-        )}
-
-        {/* Beer type selector */}
-        <Text style={styles.sectionLabel}>Type de bière</Text>
-        {/* Bug #6 : message d'erreur si aucun type */}
-        {noTypeError && (
-          <Text style={styles.typeError}>⚠️ Sélectionne un type de bière</Text>
-        )}
+        {/* Grille 3×2 des 6 types */}
         <View style={styles.typeGrid}>
           {BEER_TYPES.map((t) => {
-            const IconComponent = BEER_ICON_MAP[t.key];
-            const isActive = selectedType === t.key;
+            const key = t.key as BeerType;
+            const active = selectedType === key;
             return (
               <Pressable
                 key={t.key}
-                style={[
-                  styles.typeBtn,
-                  isActive && styles.typeBtnActive,
-                  noTypeError && !selectedType && styles.typeBtnError,
+                onPress={() => setSelectedType(key)}
+                style={({ pressed }) => [
+                  styles.typeTile,
+                  active && styles.typeTileActive,
+                  pressed && styles.pressed,
                 ]}
-                onPress={() => selectType(t.key)}
               >
-                {IconComponent ? (
-                  <IconComponent size={56} active={isActive} />
-                ) : (
-                  <Text style={styles.typeEmoji}>{t.emoji}</Text>
+                {active && (
+                  <LinearGradient
+                    colors={[...Gradients.amberSoft]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0.6, y: 1 }}
+                    style={styles.tileGradient}
+                  />
                 )}
+                <BeerGlass type={key} size={44} selected={active} />
+                <Text style={[styles.typeLabel, active && styles.typeLabelActive]}>
+                  {t.label}
+                </Text>
               </Pressable>
             );
           })}
         </View>
 
-        {/* Bar field */}
-        <Text style={styles.sectionLabel}>📍 Localisation</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Nom du bar (optionnel)..."
-          placeholderTextColor={Colors.textMuted}
-          value={barName}
-          onChangeText={setBarName}
-        />
-        <Text style={styles.geoHint}>Géolocalisation auto disponible sur mobile</Text>
+        {/* Chips bars */}
+        {bars.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>Où ça ?</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.barScroll}
+              contentContainerStyle={styles.barRow}
+            >
+              {bars.map((b) => {
+                const active = selectedBarId === b.id;
+                return (
+                  <Pressable
+                    key={b.id}
+                    onPress={() => setSelectedBarId(active ? null : b.id)}
+                    style={({ pressed }) => [
+                      styles.barChip,
+                      active && styles.barChipActive,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={[styles.barChipText, active && styles.barChipTextActive]}>
+                      {b.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </>
+        )}
 
-        {/* Friends tag — Bug #2 : le bouton ne navigue plus, il est juste informatif */}
-        <Text style={styles.sectionLabel}>👥 Avec des amis ?</Text>
-        <View style={styles.skipBtn}>
-          <Text style={styles.skipText}>Bientôt disponible — tag tes amis après le log</Text>
+        {/* Toggle visibilité */}
+        <Text style={styles.sectionLabel}>Visibilité</Text>
+        <View style={styles.segmented}>
+          {([
+            ['amis', '👥 Mes amis'],
+            ['prive', '🔒 Privé'],
+          ] as [Visibility, string][]).map(([key, label]) => {
+            const active = visibility === key;
+            return (
+              <Pressable
+                key={key}
+                onPress={() => setVisibility(key)}
+                style={[styles.segment, active && styles.segmentActive]}
+              >
+                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-      </ScrollView>
 
-      {/* CTA */}
-      <View style={styles.ctaWrapper}>
+        {/* CTA */}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        <Pressable
-          style={[styles.ctaButton, loading && styles.ctaDisabled]}
-          onPress={handleLog}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#000" />
-          ) : (
-            <Text style={styles.ctaText}>✅ LOGGER !</Text>
-          )}
-        </Pressable>
-      </View>
-    </SafeAreaView>
+        <NeonButton
+          title="VALIDER 🍺"
+          hint={selectedType ? undefined : "Choisis ta bière d'abord"}
+          disabled={!selectedType || loading}
+          onPress={handleSubmit}
+          style={styles.cta}
+        />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  // Verre animé
-  glassContainer: { alignItems: 'center', marginBottom: 16 },
-  glass: {
-    width: 60, height: 80, borderRadius: 8, borderWidth: 2, borderColor: '#555',
-    overflow: 'hidden', backgroundColor: '#1A1A1A',
-  },
-  glassFoam: {
-    height: 10, backgroundColor: '#FFF8E1', borderBottomWidth: 1, borderBottomColor: '#FFE082',
-  },
-  glassInner: { flex: 1, justifyContent: 'flex-end' },
-  glassFill: { width: '100%', borderRadius: 4 },
-  glassLabel: { color: Colors.primary, fontWeight: '700', fontSize: 13, marginTop: 6 },
-  successContainer: { alignItems: 'center', justifyContent: 'center' },
-  successEmoji: { fontSize: 64, marginBottom: 16 },
-  successText: { ...Fonts.screenTitle, fontSize: 28, color: Colors.success },
-  successSub: { ...Fonts.label, marginTop: 8, fontSize: 14 },
-  backToFeed: { marginTop: 24, padding: 12 },
-  backToFeedText: { color: Colors.textMuted, fontSize: 14 },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
-  },
-  closeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { ...Fonts.screenTitle, fontSize: 18 },
+  overlay: { flex: 1, backgroundColor: 'rgba(6,6,10,0.88)' },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 100 },
-  sectionLabel: { ...Fonts.bodyBold, marginBottom: 12, marginTop: 8 },
-  typeError: { color: Colors.danger, fontSize: 12, fontWeight: '600', marginBottom: 8 },
-  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
-  typeBtn: {
-    width: '30%', backgroundColor: Colors.surface, borderRadius: 12,
-    padding: 14, alignItems: 'center', borderWidth: 1, borderColor: Colors.border,
+  content: { paddingHorizontal: 22 },
+  pressed: { transform: [{ scale: 0.95 }] },
+
+  // Header
+  headerRow: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    justifyContent: 'space-between', gap: 12,
   },
-  typeBtnActive: { borderColor: Colors.primary, backgroundColor: 'rgba(245,166,35,0.12)' },
-  typeBtnError: { borderColor: Colors.danger },
-  typeEmoji: { fontSize: 28, marginBottom: 6 },
-  typeLabel: { ...Fonts.body, fontSize: 13 },
-  typeLabelActive: { color: Colors.primary, fontWeight: '700' },
-  input: {
-    backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1,
-    borderColor: Colors.border, padding: 14, color: Colors.text, fontSize: 15, marginBottom: 6,
+  title: { ...Fonts.display, fontSize: 27, lineHeight: 32, letterSpacing: 0.4, flex: 1 },
+  closeBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+    alignItems: 'center', justifyContent: 'center',
   },
-  geoHint: { ...Fonts.label, fontSize: 10, marginBottom: 24 },
-  skipBtn: {
-    backgroundColor: Colors.surface2, borderRadius: 10, padding: 12,
-    alignItems: 'center', marginBottom: 20,
+
+  // Grille types
+  typeGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 22,
   },
-  skipText: { ...Fonts.label, fontSize: 12 },
-  ctaWrapper: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 16, paddingBottom: 30, backgroundColor: Colors.background,
-    borderTopWidth: 1, borderTopColor: Colors.border,
+  typeTile: {
+    flexBasis: '30%', flexGrow: 1, aspectRatio: 1,
+    borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    alignItems: 'center', justifyContent: 'center', gap: 8,
+    overflow: 'hidden',
   },
-  ctaButton: { backgroundColor: Colors.primary, borderRadius: 14, padding: 16, alignItems: 'center' },
-  ctaDisabled: { opacity: 0.4 },
-  ctaText: { color: '#000000', fontSize: 18, fontWeight: '800' },
-  errorText: { color: Colors.danger, fontSize: 12, textAlign: 'center', marginBottom: 8 },
+  typeTileActive: {
+    borderColor: Colors.primary, borderWidth: 1.5,
+    boxShadow: Glow.card,
+  },
+  tileGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 16.5 },
+  typeLabel: { fontFamily: 'Outfit_700Bold', fontSize: 13.5, color: Colors.text },
+  typeLabelActive: { color: Colors.primary },
+
+  // Section labels
+  sectionLabel: { ...Fonts.label, marginTop: 24, marginBottom: 10 },
+
+  // Chips bars
+  barScroll: { marginHorizontal: -22 },
+  barRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 22, paddingVertical: 2 },
+  barChip: {
+    paddingVertical: 9, paddingHorizontal: 16, borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  barChipActive: {
+    backgroundColor: 'rgba(255,149,0,0.16)',
+    borderWidth: 1.5, borderColor: Colors.primary,
+    boxShadow: '0 0 14px rgba(255,149,0,0.30)',
+  },
+  barChipText: { fontFamily: 'Outfit_700Bold', fontSize: 13.5, color: Colors.textMuted },
+  barChipTextActive: { color: Colors.primary },
+
+  // Toggle visibilité
+  segmented: {
+    flexDirection: 'row', gap: 4, padding: 4, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  segment: {
+    flex: 1, height: 40, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  segmentActive: { backgroundColor: 'rgba(255,149,0,0.16)' },
+  segmentText: { fontFamily: 'Outfit_700Bold', fontSize: 13.5, color: Colors.textMuted },
+  segmentTextActive: { color: Colors.primary },
+
+  // CTA
+  cta: { marginTop: 30 },
+  errorText: { color: Colors.danger, fontSize: 12, textAlign: 'center', marginTop: 16 },
+
+  // Écran succès
+  successContent: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  plusOne: {
+    ...Fonts.display, fontSize: 56, lineHeight: 60, color: Colors.primary,
+    marginTop: 18, ...Glow.textAmberBig,
+  },
+  successCount: {
+    fontFamily: 'Outfit_800ExtraBold', fontSize: 18, color: Colors.text, marginTop: 12,
+  },
+  rewardRow: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center',
+    gap: 10, marginTop: 22,
+  },
+  pointsChip: {
+    paddingVertical: 8, paddingHorizontal: 16, borderRadius: Radius.pill,
+    fontFamily: 'Outfit_800ExtraBold', fontSize: 13.5, color: Colors.primary,
+    backgroundColor: 'rgba(255,149,0,0.12)',
+    borderWidth: 1, borderColor: 'rgba(255,149,0,0.45)',
+    overflow: 'hidden',
+  },
+  badgeChip: {
+    paddingVertical: 8, paddingHorizontal: 16, borderRadius: Radius.pill,
+    fontFamily: 'Outfit_800ExtraBold', fontSize: 13.5, color: Colors.cyan,
+    backgroundColor: 'rgba(0,229,255,0.10)',
+    borderWidth: 1, borderColor: 'rgba(0,229,255,0.40)',
+    boxShadow: Glow.live,
+    overflow: 'hidden',
+  },
+  successCta: { position: 'absolute', left: 32, right: 32 },
 });
