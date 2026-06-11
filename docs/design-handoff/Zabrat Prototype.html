@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zabrat — Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Oswald:wght@500;600;700&family=Archivo:wght@600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="image-slot.js"></script>
+<style>
+  :root {
+    --bg: #0A0A0F;
+    --surface: #15151C;
+    --border: #2A2A35;
+    --orange: #FF6B35;
+    --cyan: #00E5FF;
+    --text: #FFFFFF;
+    --muted: #9494A6;
+    --green: #4CAF50;
+    --red: #F85149;
+    --font-ui: 'Outfit', system-ui, sans-serif;
+  }
+  html, body { margin: 0; padding: 0; }
+  #root *, #root *::before, #root *::after { box-sizing: border-box; }
+  body {
+    background: #060609;
+    min-height: 100vh;
+    font-family: var(--font-ui);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 16px;
+    box-sizing: border-box;
+    background-image: radial-gradient(80% 60% at 50% 0%, #0C0C14 0%, #060609 70%);
+  }
+  .zb-card {
+    background: linear-gradient(170deg, #17171F, #14141B);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .zb-scroll { scrollbar-width: none; }
+  .zb-scroll::-webkit-scrollbar { display: none; }
+  .zb-hscroll { scrollbar-width: none; }
+  .zb-hscroll::-webkit-scrollbar { display: none; }
+  .zb-press { transition: transform .12s ease; }
+  .zb-press:active { transform: scale(.95); }
+  .zb-live-dot {
+    display: inline-block; border-radius: 50%; background: var(--cyan);
+    box-shadow: 0 0 8px rgb(0 229 255 / calc(.9 * var(--gi)));
+    animation: zbPulse 1.8s ease-in-out infinite;
+  }
+  .zb-user-dot {
+    display: block; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--cyan); border: 3px solid rgba(255,255,255,.85);
+    box-shadow: 0 0 0 6px rgb(0 229 255 / .15), 0 0 20px rgb(0 229 255 / calc(.6 * var(--gi)));
+  }
+  @keyframes zbPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  .zb-marker-pulse { animation: zbMarker 2s ease-in-out infinite; }
+  @keyframes zbMarker {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.45); opacity: .55; }
+  }
+  .zb-confetti {
+    position: absolute; top: -16px;
+    animation: zbFall linear forwards;
+  }
+  @keyframes zbFall {
+    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    85% { opacity: 1; }
+    100% { transform: translateY(620px) rotate(540deg); opacity: 0; }
+  }
+  .zb-pop { animation: zbPop .55s cubic-bezier(.2, 1.6, .4, 1) both; }
+  @keyframes zbPop {
+    0% { transform: scale(.3); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .zb-fade-up { animation: zbFadeUp .4s cubic-bezier(.2, .9, .3, 1) both; }
+  @keyframes zbFadeUp {
+    0% { transform: translateY(14px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  .zb-caret {
+    display: inline-block; width: 2.5px; height: 1em; background: var(--amber);
+    vertical-align: text-bottom; margin-left: 2px; border-radius: 2px;
+    box-shadow: 0 0 6px rgb(var(--amber-rgb) / .8);
+    animation: zbBlink 1.1s step-end infinite;
+  }
+  @keyframes zbBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .zb-live-dot, .zb-marker-pulse, .zb-confetti, .zb-caret { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="zabrat-core.jsx"></script>
+<script type="text/babel" src="zabrat-screens-1.jsx"></script>
+<script type="text/babel" src="zabrat-screens-2.jsx"></script>
+<script type="text/babel" src="zabrat-flows.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "glow": 0.85,
+  "statFont": "Barlow Condensed",
+  "amber": "#FF9500",
+  "feedEmpty": false
+}/*EDITMODE-END*/;
+
+const AMBER_RGB = {
+  '#FFB300': '255 179 0',
+  '#FFC53D': '255 197 61',
+  '#FF9500': '255 149 0',
+};
+
+function hexToRgbTriplet(hex) {
+  if (AMBER_RGB[hex]) return AMBER_RGB[hex];
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
+}
+
+// ─────────────────────────────────────────────
+// Tab bar
+// ─────────────────────────────────────────────
+function TabItem({ icon, label, active, onClick }) {
+  return (
+    <button onClick={onClick} className="zb-press" style={{
+      flex: 1, background: 'none', border: 'none', cursor: 'pointer',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 0 0',
+      color: active ? 'var(--amber)' : '#5C5C70', fontFamily: 'var(--font-ui)',
+    }}>
+      <Icon name={icon} size={23} color="currentColor" stroke={active ? 2 : 1.7}
+        style={active ? { filter: 'drop-shadow(0 0 7px rgb(var(--amber-rgb) / calc(.7 * var(--gi))))' } : {}} />
+      <span style={{ fontSize: 10.5, fontWeight: active ? 800 : 600, whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{
+        width: 4, height: 4, borderRadius: 99, marginTop: -1,
+        background: active ? 'var(--amber)' : 'transparent',
+        boxShadow: active ? '0 0 8px rgb(var(--amber-rgb) / calc(.9 * var(--gi)))' : 'none',
+      }}></span>
+    </button>
+  );
+}
+
+function TabBar({ tab, setTab, onLog }) {
+  return (
+    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 30 }}>
+      {/* liseré dégradé ambre */}
+      <div style={{ height: 1.5, background: 'linear-gradient(90deg, transparent, rgb(var(--amber-rgb) / .55), rgb(255 107 53 / .45), transparent)' }}></div>
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', paddingBottom: 22,
+        background: 'rgba(21,21,28,.86)', backdropFilter: 'blur(20px) saturate(150%)', WebkitBackdropFilter: 'blur(20px) saturate(150%)',
+      }}>
+        <TabItem icon="moon" label="Ce soir" active={tab === 'soir'} onClick={() => setTab('soir')} />
+        <TabItem icon="map" label="Carte" active={tab === 'carte'} onClick={() => setTab('carte')} />
+        {/* bouton LOG central */}
+        <div style={{ width: 84, position: 'relative', flexShrink: 0 }}>
+          <button onClick={onLog} className="zb-press" data-comment-anchor="log-button" style={{
+            position: 'absolute', left: '50%', top: -26, transform: 'translateX(-50%)',
+            width: 64, height: 64, borderRadius: '50%', border: 'none', cursor: 'pointer',
+            background: 'linear-gradient(135deg, var(--amber), var(--orange))',
+            boxShadow: '0 0 30px rgb(var(--amber-rgb) / calc(.55 * var(--gi))), 0 6px 18px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="beer" size={30} color="#1A0E00" stroke={2} />
+          </button>
+          <div style={{ textAlign: 'center', paddingTop: 44, fontSize: 10.5, fontWeight: 800, color: 'var(--amber)', letterSpacing: 1.2 }}>LOG</div>
+        </div>
+        <TabItem icon="trophy" label="Ligue" active={tab === 'ligue'} onClick={() => setTab('ligue')} />
+        <TabItem icon="person" label="Profil" active={tab === 'profil'} onClick={() => setTab('profil')} />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// App
+// ─────────────────────────────────────────────
+function PhoneApp({ t, flow, setFlow }) {
+  const [tab, setTab] = React.useState('soir');
+  const [logOpen, setLogOpen] = React.useState(false);
+  const [amisOpen, setAmisOpen] = React.useState(false);
+  const [wrappedOpen, setWrappedOpen] = React.useState(flow === 'wrapped');
+
+  React.useEffect(() => { setWrappedOpen(flow === 'wrapped'); }, [flow]);
+
+  if (flow === 'onboarding') return <OnboardingFlow onDone={() => setFlow('auth')} />;
+  if (flow === 'auth') return <AuthFlow onDone={() => setFlow('app')} />;
+
+  const screenLabel = { soir: 'Ce soir', carte: 'Carte', ligue: 'Ligue', profil: 'Profil' }[tab];
+
+  return (
+    <div data-screen-label={screenLabel} style={{ position: 'absolute', inset: 0, background: 'var(--bg)' }}>
+      {tab === 'soir' && <CeSoirScreen feedEmpty={t.feedEmpty} onOpenLog={() => setLogOpen(true)} onOpenProfil={() => setTab('profil')} />}
+      {tab === 'carte' && <CarteScreen />}
+      {tab === 'ligue' && <LigueScreen />}
+      {tab === 'profil' && <ProfilScreen onOpenWrapped={() => setWrappedOpen(true)} onOpenAmis={() => setAmisOpen(true)} />}
+
+      <TabBar tab={tab} setTab={setTab} onLog={() => setLogOpen(true)} />
+
+      {amisOpen && (
+        <div data-screen-label="Amis" style={{ position: 'absolute', inset: 0, zIndex: 35, background: 'var(--bg)' }}>
+          <AmisScreen onBack={() => setAmisOpen(false)} />
+        </div>
+      )}
+      {logOpen && <LogModal onClose={() => setLogOpen(false)} />}
+      {wrappedOpen && <WrappedScreen onClose={() => { setWrappedOpen(false); if (flow === 'wrapped') setFlow('app'); }} />}
+    </div>
+  );
+}
+
+const FLOWS = [
+  ['onboarding', 'Onboarding'],
+  ['auth', 'Auth'],
+  ['app', 'App'],
+  ['wrapped', 'Wrapped'],
+];
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [flow, setFlow] = React.useState('app');
+
+  const vars = {
+    '--gi': t.glow,
+    '--amber': t.amber,
+    '--amber-rgb': hexToRgbTriplet(t.amber),
+    '--font-stat': `'${t.statFont}', sans-serif`,
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 26, ...vars }}>
+      {/* rail designer — navigation entre les flows */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {FLOWS.map(([k, label]) => (
+          <button key={k} onClick={() => setFlow(k)} style={{
+            padding: '9px 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+            fontFamily: 'var(--font-ui)', fontSize: 12.5, fontWeight: 700,
+            background: flow === k ? 'rgb(var(--amber-rgb) / .14)' : 'rgba(255,255,255,.04)',
+            border: flow === k ? '1px solid rgb(var(--amber-rgb) / .5)' : '1px solid rgba(255,255,255,.08)',
+            color: flow === k ? 'var(--amber)' : '#6E6E82',
+            transition: 'all .15s',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      <IOSDevice dark>
+        <div style={{ position: 'absolute', inset: 0, ...vars }}>
+          <PhoneApp key={flow === 'wrapped' ? 'app' : flow} t={t} flow={flow} setFlow={setFlow} />
+        </div>
+      </IOSDevice>
+
+      <TweaksPanel>
+        <TweakSection label="Néon" />
+        <TweakSlider label="Intensité du glow" value={t.glow} min={0.3} max={1.8} step={0.05}
+          onChange={(v) => setTweak('glow', v)} />
+        <TweakColor label="Ambre signature" value={t.amber}
+          options={['#FFB300', '#FFC53D', '#FF9500']}
+          onChange={(v) => setTweak('amber', v)} />
+        <TweakSection label="Typo" />
+        <TweakSelect label="Chiffres / titres" value={t.statFont}
+          options={['Barlow Condensed', 'Oswald', 'Archivo']}
+          onChange={(v) => setTweak('statFont', v)} />
+        <TweakSection label="États" />
+        <TweakToggle label="Feed vide (premier soir)" value={t.feedEmpty}
+          onChange={(v) => setTweak('feedEmpty', v)} />
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
