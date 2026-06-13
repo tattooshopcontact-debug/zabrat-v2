@@ -202,7 +202,15 @@ export async function getFriendsCount(userId: string): Promise<number> {
 }
 
 // Récupérer les IDs des amis (utile pour le feed et leaderboard)
+// Léger : uniquement les IDs des amis acceptés (sur les chemins chauds — feed, logBeer).
+// N'appelle PAS getFriends (qui charge en plus le compteur mensuel par ami).
 export async function getFriendIds(userId: string): Promise<string[]> {
-  const friends = await getFriends(userId);
-  return friends.map((f) => f.id);
+  const [{ data: a }, { data: b }] = await Promise.all([
+    supabase.from('friendships').select('friend_id').eq('user_id', userId).eq('status', 'accepted'),
+    supabase.from('friendships').select('user_id').eq('friend_id', userId).eq('status', 'accepted'),
+  ]);
+  const ids = new Set<string>();
+  (a ?? []).forEach((r: any) => ids.add(r.friend_id));
+  (b ?? []).forEach((r: any) => ids.add(r.user_id));
+  return [...ids];
 }
