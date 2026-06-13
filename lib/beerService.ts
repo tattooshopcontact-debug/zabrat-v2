@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { checkBadgeProximity, checkStreakDanger } from './notificationService';
 import { awardBadge, type UnlockedBadge } from './badgeAwarder';
+import { getFriendIds } from './friendsService';
 
 // Re-export pour compatibilité avec les imports existants (écran succès, etc.)
 export type { UnlockedBadge };
@@ -10,6 +11,7 @@ interface LogBeerParams {
   beerType: string;
   beerBrand?: string;
   barName?: string;
+  barId?: string;
   latitude?: number;
   longitude?: number;
   visibility?: 'public' | 'friends' | 'ghost';
@@ -52,16 +54,52 @@ function calculatePoints(params: {
 }
 
 export async function logBeer(params: LogBeerParams): Promise<LogBeerResult> {
-  const { userId, beerType, beerBrand, barName } = params;
+  const { userId, beerType, beerBrand, barName, barId } = params;
 
   // Horodatage de CE log (utilisé pour les badges temporels)
   const logDate = new Date();
+
+  // 0. Multiplicateurs contextuels — calculés AVANT l'insert pour ne pas se compter soi-même.
+  //    Tous fail-soft : une erreur ici ne doit JAMAIS bloquer le log (défaut false).
+  let isNewBar = false;   // premier log de cet utilisateur dans ce bar
+  let withFriends = false; // un ami est check-in dans ce bar maintenant
+
+  if (barId) {
+    // isNewBar : aucun beer_log antérieur de cet utilisateur sur ce bar_id
+    try {
+      const { count, error } = await supabase
+        .from('beer_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('bar_id', barId);
+      if (!error) isNewBar = (count ?? 0) === 0;
+    } catch {
+      isNewBar = false;
+    }
+
+    // withFriends : un ami a un check-in actif (expires_at > now) dans ce bar
+    try {
+      const friendIds = await getFriendIds(userId);
+      if (friendIds.length > 0) {
+        const { count, error } = await supabase
+          .from('bar_checkins')
+          .select('user_id', { count: 'exact', head: true })
+          .eq('bar_id', barId)
+          .in('user_id', friendIds)
+          .gt('expires_at', new Date().toISOString());
+        if (!error) withFriends = (count ?? 0) > 0;
+      }
+    } catch {
+      withFriends = false;
+    }
+  }
 
   // 1. INSERT dans beer_logs
   const { error: logError } = await supabase.from('beer_logs').insert({
     user_id: userId,
     beer_type: beerType,
     beer_brand: beerBrand || null,
+    bar_id: barId ?? null,
     latitude: params.latitude || null,
     longitude: params.longitude || null,
     visibility: params.visibility ?? 'friends',
@@ -120,8 +158,8 @@ export async function logBeer(params: LogBeerParams): Promise<LogBeerResult> {
   const weekStart = getWeekStart();
   const points = calculatePoints({
     beerType,
-    isNewBar: false, // TODO: vérifier si nouveau bar
-    withFriends: false, // TODO: vérifier si avec amis
+    isNewBar,
+    withFriends,
     streakActive: newStreak >= 7,
   });
 
@@ -152,6 +190,7 @@ export async function logBeer(params: LogBeerParams): Promise<LogBeerResult> {
     checkBeerTypeBadges(userId, beerType),
     checkStreakBadges(userId, newStreak),
     checkTimeBadges(userId, logDate),
+    checkMarathonBadge(userId),
   ]);
   const allUnlocked = settled.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
   // L'écran succès n'en affiche qu'un seul → on prend le premier (undefined si aucun).
@@ -258,6 +297,38 @@ async function checkTimeBadges(userId: string, createdAt: Date): Promise<Unlocke
 
     const results = await Promise.all(candidates);
     return results.filter((b): b is UnlockedBadge => b !== null);
+  } catch {
+    return [];
+  }
+}
+
+// Badge Marathon : 3 bars distincts loggés sur la même soirée (≥ 3 bar_id non nuls).
+// « Ce soir » = depuis 18h locales (sinon minuit), même frontière que statsService.
+// Fail-soft : retourne [] en cas d'erreur, ne throw jamais.
+async function checkMarathonBadge(userId: string): Promise<UnlockedBadge[]> {
+  try {
+    const now = new Date();
+    const tonightStart = new Date(now);
+    tonightStart.setHours(now.getHours() >= 18 ? 18 : 0, 0, 0, 0);
+
+    const { data, error } = await supabase
+      .from('beer_logs')
+      .select('bar_id')
+      .eq('user_id', userId)
+      .gte('created_at', tonightStart.toISOString());
+
+    if (error) return [];
+
+    const distinctBars = new Set<string>();
+    for (const row of (data ?? []) as { bar_id: string | null }[]) {
+      if (row.bar_id) distinctBars.add(row.bar_id);
+    }
+
+    if (distinctBars.size >= 3) {
+      const badge = await awardBadge(userId, 'bars_same_night', 3);
+      return badge ? [badge] : [];
+    }
+    return [];
   } catch {
     return [];
   }

@@ -98,6 +98,7 @@ export default function LogBeerScreen() {
         userId: user.id,
         beerType: selectedType,
         barName: selectedBar?.name,
+        barId: selectedBar?.id,
         latitude: selectedBar?.latitude,
         longitude: selectedBar?.longitude,
         visibility,
