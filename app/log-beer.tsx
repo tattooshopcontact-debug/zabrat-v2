@@ -9,7 +9,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-na
 import { Colors, Fonts, Glow, Gradients, Radius } from '../constants/theme';
 import { BEER_TYPES } from '../constants/mockData';
 import { useAuthStore } from '../stores/authStore';
-import { logBeer } from '../lib/beerService';
+import { logBeer, UnlockedBadge } from '../lib/beerService';
 import { getBarsWithCheckins, Bar } from '../lib/mapService';
 import { getUserStats } from '../lib/statsService';
 import { Confetti } from '../components/Confetti';
@@ -33,8 +33,8 @@ export default function LogBeerScreen() {
   const [tonightCount, setTonightCount] = useState(1);
   const [error, setError] = useState('');
   const [showConfetti, setShowConfetti] = useState(false);
-  // logBeer() ne retourne pas (encore) de badge fraîchement débloqué — le chip reste prêt.
-  const [unlockedBadge] = useState<string | null>(null);
+  // Badge fraîchement débloqué renvoyé par logBeer() — alimente le chip cyan de l'écran succès.
+  const [unlockedBadge, setUnlockedBadge] = useState<UnlockedBadge | null>(null);
 
   // Pop de la chope sur l'écran succès : scale 0.3 → 1 (spring)
   const popScale = useSharedValue(0.3);
@@ -102,6 +102,7 @@ export default function LogBeerScreen() {
       });
 
       setEarnedPoints(result.points);
+      setUnlockedBadge(result.unlockedBadge ?? null);
       setLogged(true);
       setShowConfetti(true);
       triggerHaptic();
@@ -136,7 +137,7 @@ export default function LogBeerScreen() {
           <View style={styles.rewardRow}>
             <Text style={styles.pointsChip}>+{earnedPoints} pts</Text>
             {unlockedBadge && (
-              <Text style={styles.badgeChip}>🏅 Badge « {unlockedBadge} » débloqué</Text>
+              <Text style={styles.badgeChip}>🏅 Badge « {unlockedBadge.name} » débloqué</Text>
             )}
           </View>
         </View>

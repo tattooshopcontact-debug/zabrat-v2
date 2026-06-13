@@ -10,6 +10,20 @@ interface LogBeerParams {
   longitude?: number;
 }
 
+// Badge fraîchement débloqué (renvoyé à l'écran succès)
+export interface UnlockedBadge {
+  name: string;
+  icon: string;
+}
+
+export interface LogBeerResult {
+  newTotal: number;
+  newLevel: number;
+  newStreak: number;
+  points: number;
+  unlockedBadge?: UnlockedBadge;
+}
+
 // Calcul du niveau basé sur le total de bières
 function calculateLevel(totalBeers: number): number {
   if (totalBeers >= 500) return 7;
@@ -38,7 +52,7 @@ function calculatePoints(params: {
   return Math.round(points * 10) / 10;
 }
 
-export async function logBeer(params: LogBeerParams) {
+export async function logBeer(params: LogBeerParams): Promise<LogBeerResult> {
   const { userId, beerType, beerBrand, barName } = params;
 
   // 1. INSERT dans beer_logs
@@ -129,19 +143,24 @@ export async function logBeer(params: LogBeerParams) {
   }
 
   // 5. Vérifier les badges quantité
-  await checkQuantityBadges(userId, newTotal);
+  const quantityUnlocked = await checkQuantityBadges(userId, newTotal);
 
   // 6. Vérifier les badges type de bière
-  await checkBeerTypeBadges(userId, beerType);
+  const typeUnlocked = await checkBeerTypeBadges(userId, beerType);
 
   // 7. Vérifier les badges streak
-  await checkStreakBadges(userId, newStreak);
+  const streakUnlocked = await checkStreakBadges(userId, newStreak);
+
+  // On collecte tous les badges fraîchement débloqués ; l'écran succès n'en
+  // affiche qu'un seul → on prend le premier (undefined si aucun).
+  const allUnlocked = [...quantityUnlocked, ...typeUnlocked, ...streakUnlocked];
+  const unlockedBadge = allUnlocked[0];
 
   // 8. Notifications : badge proche + streak danger
   checkBadgeProximity(userId, newTotal).catch(() => {});
   checkStreakDanger(userId, newStreak, today).catch(() => {});
 
-  return { newTotal, newLevel, newStreak, points };
+  return { newTotal, newLevel, newStreak, points, unlockedBadge };
 }
 
 // Lundi de la semaine en cours
@@ -154,31 +173,43 @@ function getWeekStart(): string {
 }
 
 // Vérifier et attribuer les badges quantité
-async function checkQuantityBadges(userId: string, totalBeers: number) {
+async function checkQuantityBadges(userId: string, totalBeers: number): Promise<UnlockedBadge[]> {
   const thresholds = [1, 10, 25, 50, 100, 200, 500, 1000];
+  const unlocked: UnlockedBadge[] = [];
 
   for (const threshold of thresholds) {
     if (totalBeers >= threshold) {
       // Récupérer le badge correspondant
       const { data: badge } = await supabase
         .from('badges')
-        .select('id')
+        .select('id, name, icon')
         .eq('condition_type', 'total_beers')
         .eq('condition_value', threshold)
         .maybeSingle();
 
       if (badge) {
-        // Insérer si pas déjà gagné (UNIQUE constraint protège)
-        await supabase
+        // Insérer si pas déjà gagné. ignoreDuplicates → l'INSERT est ignoré
+        // sur conflit, donc .select() ne renvoie QUE les lignes réellement insérées.
+        const { data: inserted } = await supabase
           .from('user_badges')
-          .upsert({ user_id: userId, badge_id: badge.id }, { onConflict: 'user_id,badge_id' });
+          .upsert(
+            { user_id: userId, badge_id: badge.id },
+            { onConflict: 'user_id,badge_id', ignoreDuplicates: true }
+          )
+          .select('badge_id');
+
+        if (inserted && inserted.length > 0) {
+          unlocked.push({ name: badge.name, icon: badge.icon });
+        }
       }
     }
   }
+
+  return unlocked;
 }
 
 // Vérifier les badges par type de bière
-async function checkBeerTypeBadges(userId: string, beerType: string) {
+async function checkBeerTypeBadges(userId: string, beerType: string): Promise<UnlockedBadge[]> {
   const conditionMap: Record<string, string> = {
     ipa: 'beer_type_ipa',
     blanche: 'beer_type_blanche',
@@ -187,7 +218,7 @@ async function checkBeerTypeBadges(userId: string, beerType: string) {
   };
 
   const conditionType = conditionMap[beerType];
-  if (!conditionType) return;
+  if (!conditionType) return [];
 
   // Compter combien de ce type l'utilisateur a logué
   const { count } = await supabase
@@ -196,12 +227,12 @@ async function checkBeerTypeBadges(userId: string, beerType: string) {
     .eq('user_id', userId)
     .eq('beer_type', beerType);
 
-  if (!count) return;
+  if (!count) return [];
 
   // Vérifier si un badge existe pour ce count
   const { data: badge } = await supabase
     .from('badges')
-    .select('id')
+    .select('id, name, icon')
     .eq('condition_type', conditionType)
     .lte('condition_value', count)
     .order('condition_value', { ascending: false })
@@ -209,30 +240,51 @@ async function checkBeerTypeBadges(userId: string, beerType: string) {
     .maybeSingle();
 
   if (badge) {
-    await supabase
+    const { data: inserted } = await supabase
       .from('user_badges')
-      .upsert({ user_id: userId, badge_id: badge.id }, { onConflict: 'user_id,badge_id' });
+      .upsert(
+        { user_id: userId, badge_id: badge.id },
+        { onConflict: 'user_id,badge_id', ignoreDuplicates: true }
+      )
+      .select('badge_id');
+
+    if (inserted && inserted.length > 0) {
+      return [{ name: badge.name, icon: badge.icon }];
+    }
   }
+
+  return [];
 }
 
 // Vérifier les badges streak
-async function checkStreakBadges(userId: string, currentStreak: number) {
+async function checkStreakBadges(userId: string, currentStreak: number): Promise<UnlockedBadge[]> {
   const thresholds = [3, 7, 30];
+  const unlocked: UnlockedBadge[] = [];
 
   for (const threshold of thresholds) {
     if (currentStreak >= threshold) {
       const { data: badge } = await supabase
         .from('badges')
-        .select('id')
+        .select('id, name, icon')
         .eq('condition_type', 'streak_days')
         .eq('condition_value', threshold)
         .maybeSingle();
 
       if (badge) {
-        await supabase
+        const { data: inserted } = await supabase
           .from('user_badges')
-          .upsert({ user_id: userId, badge_id: badge.id }, { onConflict: 'user_id,badge_id' });
+          .upsert(
+            { user_id: userId, badge_id: badge.id },
+            { onConflict: 'user_id,badge_id', ignoreDuplicates: true }
+          )
+          .select('badge_id');
+
+        if (inserted && inserted.length > 0) {
+          unlocked.push({ name: badge.name, icon: badge.icon });
+        }
       }
     }
   }
+
+  return unlocked;
 }
