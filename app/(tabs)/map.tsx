@@ -259,24 +259,22 @@ export default function MapScreen() {
         {loading ? <ActivityIndicator size="large" color={Colors.primary} /> : renderMap()}
       </View>
 
-      {/* Pill flottant « Qui sort ce soir ? » */}
-      <View pointerEvents="box-none" style={[s.pillRow, { top: insets.top + 12 }]}>
+      {/* Barre du haut : pill « Qui sort » à gauche, toggle visibilité à droite */}
+      <View pointerEvents="box-none" style={[s.topBar, { top: insets.top + 12 }]}>
         <Pressable
           onPress={() => setWhoOpen(o => !o)}
           accessibilityRole="button"
           accessibilityLabel={`Qui sort ce soir, ${liveFriends.length} amis`}
-          style={({ pressed }) => [pressed && { transform: [{ scale: 0.96 }] }]}
+          style={({ pressed }) => [s.pillPress, pressed && { transform: [{ scale: 0.96 }] }]}
         >
           <GlassCard style={s.pill}>
             <PulsingDot size={7} />
-            <Text style={s.pillText}>Qui sort ce soir ?</Text>
+            <Text style={s.pillText} numberOfLines={1}>Qui sort ce soir ?</Text>
             <Text style={s.pillCount}>{liveFriends.length}</Text>
           </GlassCard>
         </Pressable>
-      </View>
 
-      {/* Toggle visibilité du check-in (logique existante conservée) */}
-      <View style={[s.visToggle, { top: insets.top + 12 }]}>
+        {/* Toggle visibilité du check-in (logique existante conservée) */}
         <GlassCard style={s.visCard}>
           {([
             { key: 'public' as VisibilityMode, icon: '🌍' },
@@ -352,17 +350,20 @@ const s = StyleSheet.create({
   fallbackText: { ...Fonts.label, textAlign: 'center' },
 
   // Pill flottant
-  pillRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 10 },
+  topBar: {
+    position: 'absolute', left: 16, right: 16, zIndex: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+  },
+  pillPress: { flexShrink: 1 },
   pill: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingVertical: 10, paddingHorizontal: 16,
     borderRadius: Radius.pill,
   },
-  pillText: { fontFamily: 'Outfit_700Bold', fontSize: 13.5, color: Colors.text },
+  pillText: { fontFamily: 'Outfit_700Bold', fontSize: 13.5, color: Colors.text, flexShrink: 1 },
   pillCount: { fontFamily: 'Outfit_800ExtraBold', fontSize: 13.5, color: Colors.cyan },
 
   // Toggle visibilité
-  visToggle: { position: 'absolute', right: 16, zIndex: 10 },
   visCard: {
     flexDirection: 'row', alignItems: 'center', gap: 2,
     paddingVertical: 5, paddingHorizontal: 5,
