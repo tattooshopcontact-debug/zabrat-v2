@@ -142,18 +142,15 @@ export async function logBeer(params: LogBeerParams): Promise<LogBeerResult> {
     });
   }
 
-  // 5. Vérifier les badges quantité
-  const quantityUnlocked = await checkQuantityBadges(userId, newTotal);
-
-  // 6. Vérifier les badges type de bière
-  const typeUnlocked = await checkBeerTypeBadges(userId, beerType);
-
-  // 7. Vérifier les badges streak
-  const streakUnlocked = await checkStreakBadges(userId, newStreak);
-
-  // On collecte tous les badges fraîchement débloqués ; l'écran succès n'en
-  // affiche qu'un seul → on prend le premier (undefined si aucun).
-  const allUnlocked = [...quantityUnlocked, ...typeUnlocked, ...streakUnlocked];
+  // 5-7. Vérifier les badges (quantité / type / streak) en fail-soft :
+  // une erreur d'attribution de badge ne doit JAMAIS bloquer l'enregistrement.
+  const settled = await Promise.allSettled([
+    checkQuantityBadges(userId, newTotal),
+    checkBeerTypeBadges(userId, beerType),
+    checkStreakBadges(userId, newStreak),
+  ]);
+  const allUnlocked = settled.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
+  // L'écran succès n'en affiche qu'un seul → on prend le premier (undefined si aucun).
   const unlockedBadge = allUnlocked[0];
 
   // 8. Notifications : badge proche + streak danger
