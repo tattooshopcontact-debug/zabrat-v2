@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { awardBadge } from './badgeAwarder';
 
 export interface FriendProfile {
   id: string;
@@ -57,12 +58,33 @@ export async function sendFriendRequest(userId: string, friendId: string) {
 
 // Accepter une demande d'ami
 export async function acceptFriendRequest(requestId: string) {
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from('friendships')
     .update({ status: 'accepted' })
-    .eq('id', requestId);
+    .eq('id', requestId)
+    .select('user_id, friend_id')
+    .maybeSingle();
 
   if (error) throw error;
+
+  // Attribuer les badges "friends_count" aux DEUX utilisateurs nouvellement connectés.
+  // Silencieux, fail-soft : ne change ni le retour ni le comportement.
+  if (updated) {
+    awardFriendsCountBadges(updated.user_id).catch(() => {});
+    awardFriendsCountBadges(updated.friend_id).catch(() => {});
+  }
+}
+
+// Attribue les badges friends_count (3/10/20) selon le nombre d'amis acceptés. Fail-soft.
+async function awardFriendsCountBadges(userId: string): Promise<void> {
+  try {
+    const count = await getFriendsCount(userId);
+    if (count >= 3) await awardBadge(userId, 'friends_count', 3);
+    if (count >= 10) await awardBadge(userId, 'friends_count', 10);
+    if (count >= 20) await awardBadge(userId, 'friends_count', 20);
+  } catch {
+    // silencieux
+  }
 }
 
 // Refuser / supprimer une demande

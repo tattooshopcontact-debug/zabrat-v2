@@ -1,5 +1,9 @@
 import { supabase } from './supabase';
 import { checkBadgeProximity, checkStreakDanger } from './notificationService';
+import { awardBadge, type UnlockedBadge } from './badgeAwarder';
+
+// Re-export pour compatibilité avec les imports existants (écran succès, etc.)
+export type { UnlockedBadge };
 
 interface LogBeerParams {
   userId: string;
@@ -9,12 +13,6 @@ interface LogBeerParams {
   latitude?: number;
   longitude?: number;
   visibility?: 'public' | 'friends' | 'ghost';
-}
-
-// Badge fraîchement débloqué (renvoyé à l'écran succès)
-export interface UnlockedBadge {
-  name: string;
-  icon: string;
 }
 
 export interface LogBeerResult {
@@ -55,6 +53,9 @@ function calculatePoints(params: {
 
 export async function logBeer(params: LogBeerParams): Promise<LogBeerResult> {
   const { userId, beerType, beerBrand, barName } = params;
+
+  // Horodatage de CE log (utilisé pour les badges temporels)
+  const logDate = new Date();
 
   // 1. INSERT dans beer_logs
   const { error: logError } = await supabase.from('beer_logs').insert({
@@ -150,6 +151,7 @@ export async function logBeer(params: LogBeerParams): Promise<LogBeerResult> {
     checkQuantityBadges(userId, newTotal),
     checkBeerTypeBadges(userId, beerType),
     checkStreakBadges(userId, newStreak),
+    checkTimeBadges(userId, logDate),
   ]);
   const allUnlocked = settled.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
   // L'écran succès n'en affiche qu'un seul → on prend le premier (undefined si aucun).
@@ -205,6 +207,60 @@ async function checkQuantityBadges(userId: string, totalBeers: number): Promise<
   }
 
   return unlocked;
+}
+
+// Vérifier les badges temporels / saisonniers à partir des timestamps des beer_logs.
+// Fail-soft : retourne [] en cas d'erreur, ne throw jamais. Heures en LOCAL.
+async function checkTimeBadges(userId: string, createdAt: Date): Promise<UnlockedBadge[]> {
+  try {
+    const { data: logs } = await supabase
+      .from('beer_logs')
+      .select('created_at, beer_type')
+      .eq('user_id', userId);
+
+    const rows = (logs ?? []) as { created_at: string; beer_type: string | null }[];
+
+    // Comptages client-side
+    let afterMidnight = 0; // heure locale ∈ [0,6)
+    let afterwork = 0; // heure locale ∈ [17,20)
+    let weekend = 0; // samedi (6) ou dimanche (0)
+    const distinctTypes = new Set<string>();
+
+    for (const row of rows) {
+      const d = new Date(row.created_at);
+      const h = d.getHours();
+      const day = d.getDay();
+      if (h >= 0 && h < 6) afterMidnight++;
+      if (h >= 17 && h < 20) afterwork++;
+      if (day === 0 || day === 6) weekend++;
+      if (row.beer_type) distinctTypes.add(row.beer_type);
+    }
+
+    // Caractéristiques de CE log
+    const thisHour = createdAt.getHours();
+    const thisDay = createdAt.getDay();
+    const thisMonth = createdAt.getMonth(); // 0 = janvier
+    const thisDate = createdAt.getDate();
+
+    const candidates: Promise<UnlockedBadge | null>[] = [];
+
+    // Comptages cumulés
+    if (afterMidnight >= 5) candidates.push(awardBadge(userId, 'after_midnight', 5));
+    if (afterwork >= 5) candidates.push(awardBadge(userId, 'afterwork_logs', 5));
+    if (weekend >= 10) candidates.push(awardBadge(userId, 'weekend_beers', 10));
+    if (distinctTypes.size >= 10) candidates.push(awardBadge(userId, 'unique_beer_types', 10));
+
+    // Une seule occurrence suffit (basé sur CE log)
+    if (thisHour >= 2 && thisHour < 6) candidates.push(awardBadge(userId, 'late_night_log', 1));
+    if (thisDay === 5 && thisHour < 18) candidates.push(awardBadge(userId, 'early_friday', 1));
+    if (thisMonth === 11 && thisDate === 24) candidates.push(awardBadge(userId, 'christmas_eve', 1));
+    if (thisMonth === 11 && thisDate === 31) candidates.push(awardBadge(userId, 'new_years_eve', 1));
+
+    const results = await Promise.all(candidates);
+    return results.filter((b): b is UnlockedBadge => b !== null);
+  } catch {
+    return [];
+  }
 }
 
 // Vérifier les badges par type de bière

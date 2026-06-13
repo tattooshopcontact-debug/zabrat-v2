@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { getFriendIds } from './friendsService';
+import { awardBadge } from './badgeAwarder';
 
 export interface Bar {
   id: string;
@@ -150,23 +151,52 @@ export async function checkinBar(userId: string, barId: string, visibility: stri
     .update({ checkin_count: visitCount })
     .eq('id', barId);
 
-  // Vérifier badge "Roi du Bar" (5 visites)
-  if (visitCount >= 5) {
-    const { data: badge } = await supabase
-      .from('badges')
-      .select('id')
-      .eq('condition_type', 'same_bar_checkins')
-      .eq('condition_value', 5)
-      .maybeSingle();
-
-    if (badge) {
-      await supabase
-        .from('user_badges')
-        .upsert({ user_id: userId, badge_id: badge.id }, { onConflict: 'user_id,badge_id' });
-    }
-  }
+  // Attribution des badges d'exploration (silencieux, fail-soft : ne bloque jamais le check-in)
+  awardCheckinBadges(userId).catch(() => {});
 
   return { isNew: true, visitCount };
+}
+
+// Attribue les badges liés aux check-ins (exploration). Fail-soft, silencieux.
+async function awardCheckinBadges(userId: string): Promise<void> {
+  try {
+    // Tous les check-ins de l'utilisateur, avec la ville du bar
+    const { data: rows } = await supabase
+      .from('bar_checkins')
+      .select('bar_id, visit_count, bars!bar_checkins_bar_id_fkey(city)')
+      .eq('user_id', userId);
+
+    const checkins = (rows ?? []) as any[];
+
+    // Premier check-in jamais effectué
+    if (checkins.length === 1) {
+      await awardBadge(userId, 'first_checkin', 1);
+    }
+
+    // Bars distincts visités
+    const distinctBars = new Set(checkins.map((c) => c.bar_id)).size;
+    if (distinctBars >= 5) await awardBadge(userId, 'unique_bars', 5);
+    if (distinctBars >= 15) await awardBadge(userId, 'unique_bars', 15);
+    if (distinctBars >= 30) await awardBadge(userId, 'unique_bars', 30);
+
+    // Villes distinctes (la jointure peut renvoyer un objet ou un tableau selon le typing)
+    const distinctCities = new Set(
+      checkins
+        .map((c) => {
+          const b = c.bars;
+          const rec = Array.isArray(b) ? b[0] : b;
+          return rec?.city as string | undefined;
+        })
+        .filter((city): city is string => !!city)
+    ).size;
+    if (distinctCities >= 3) await awardBadge(userId, 'unique_cities', 3);
+
+    // Le Régulier : 10 visites dans le même bar
+    const maxVisits = checkins.reduce((m, c) => Math.max(m, (c.visit_count as number) ?? 0), 0);
+    if (maxVisits >= 10) await awardBadge(userId, 'same_bar_visits', 10);
+  } catch {
+    // silencieux
+  }
 }
 
 // Check-out manuellement
