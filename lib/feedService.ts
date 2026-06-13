@@ -56,6 +56,8 @@ export async function fetchFeed(userId: string, limit = 20): Promise<FeedItem[]>
     .from('beer_logs')
     .select('id, user_id, beer_type, beer_brand, created_at, users!beer_logs_user_id_fkey(display_name, username)')
     .in('user_id', allIds)
+    // Inclure la ligne si c'est la mienne OU si elle n'est pas en ghost (logs privés des amis masqués)
+    .or(`user_id.eq.${userId},visibility.neq.ghost`)
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -137,9 +139,12 @@ export function subscribeToFeed(
         table: 'beer_logs',
       },
       (payload) => {
-        if (allIds.includes(payload.new.user_id)) {
-          onNewLog(payload.new);
-        }
+        const row = payload.new as { user_id: string; visibility?: string };
+        if (!allIds.includes(row.user_id)) return;
+        // Masquer les logs privés (ghost) des autres ; les miens passent quelle que soit la visibilité.
+        // Si le payload realtime n'inclut pas `visibility`, on laisse passer (un fetchFeed appliquera le filtre).
+        if (row.visibility === 'ghost' && row.user_id !== userId) return;
+        onNewLog(payload.new);
       },
     )
     .subscribe();

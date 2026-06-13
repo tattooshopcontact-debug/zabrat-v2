@@ -8,6 +8,7 @@ interface LogBeerParams {
   barName?: string;
   latitude?: number;
   longitude?: number;
+  visibility?: 'public' | 'friends' | 'ghost';
 }
 
 // Badge fraîchement débloqué (renvoyé à l'écran succès)
@@ -62,6 +63,7 @@ export async function logBeer(params: LogBeerParams): Promise<LogBeerResult> {
     beer_brand: beerBrand || null,
     latitude: params.latitude || null,
     longitude: params.longitude || null,
+    visibility: params.visibility ?? 'friends',
   });
 
   if (logError) throw logError;

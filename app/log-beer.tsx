@@ -27,6 +27,7 @@ export default function LogBeerScreen() {
   const [selectedType, setSelectedType] = useState<BeerType | null>(null);
   const [bars, setBars] = useState<Bar[]>([]);
   const [selectedBarId, setSelectedBarId] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<'friends' | 'ghost'>('friends');
   const [logged, setLogged] = useState(false);
   const [loading, setLoading] = useState(false);
   const [earnedPoints, setEarnedPoints] = useState(0);
@@ -99,6 +100,7 @@ export default function LogBeerScreen() {
         barName: selectedBar?.name,
         latitude: selectedBar?.latitude,
         longitude: selectedBar?.longitude,
+        visibility,
       });
 
       setEarnedPoints(result.points);
@@ -237,7 +239,33 @@ export default function LogBeerScreen() {
           </>
         )}
 
-        {/* TODO post-refonte : toggle visibilité quand beer_logs.visibility existera (migration + service + filtre feed) */}
+        {/* Visibilité du log */}
+        <Text style={styles.sectionLabel}>Qui peut voir ?</Text>
+        <View style={styles.visRow}>
+          {([
+            { key: 'friends', label: '👥 Mes amis' },
+            { key: 'ghost', label: '🔒 Privé' },
+          ] as const).map((opt) => {
+            const active = visibility === opt.key;
+            return (
+              <Pressable
+                key={opt.key}
+                onPress={() => setVisibility(opt.key)}
+                style={({ pressed }) => [
+                  styles.visSegment,
+                  active && styles.visSegmentActive,
+                  pressed && styles.pressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.visSegmentText, active && styles.visSegmentTextActive]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         {/* CTA */}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -308,6 +336,22 @@ const styles = StyleSheet.create({
   },
   barChipText: { fontFamily: 'Outfit_700Bold', fontSize: 13.5, color: Colors.textMuted },
   barChipTextActive: { color: Colors.primary },
+
+  // Toggle visibilité
+  visRow: { flexDirection: 'row', gap: 10 },
+  visSegment: {
+    flex: 1, paddingVertical: 12, borderRadius: Radius.pill,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  visSegmentActive: {
+    backgroundColor: 'rgba(255,149,0,0.16)',
+    borderWidth: 1.5, borderColor: Colors.primary,
+    boxShadow: '0 0 14px rgba(255,149,0,0.30)',
+  },
+  visSegmentText: { fontFamily: 'Outfit_700Bold', fontSize: 13.5, color: Colors.textMuted },
+  visSegmentTextActive: { color: Colors.primary },
 
   // CTA
   cta: { marginTop: 30 },
