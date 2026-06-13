@@ -181,7 +181,7 @@ export default function FriendsScreen() {
           <View style={styles.cardInfo}>
             <Text style={styles.cardName}>{f.display_name}</Text>
             <Text style={styles.cardSub} numberOfLines={1}>
-              {f.total_beers} bière{f.total_beers > 1 ? 's' : ''} au total
+              {f.monthBeers} bière{f.monthBeers > 1 ? 's' : ''} ce mois
               {liveBar ? <Text style={styles.cardLive}> · 📍 au {liveBar}</Text> : null}
             </Text>
           </View>

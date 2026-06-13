@@ -6,6 +6,7 @@ export interface FriendProfile {
   username: string;
   avatar_url?: string;
   total_beers: number;
+  monthBeers: number;
   level: number;
 }
 
@@ -24,7 +25,7 @@ export async function searchByPhone(phone: string): Promise<FriendProfile | null
     .eq('phone', phone)
     .maybeSingle();
 
-  return data;
+  return data ? { ...data, monthBeers: 0 } : null;
 }
 
 // Chercher par username
@@ -35,7 +36,7 @@ export async function searchByUsername(query: string): Promise<FriendProfile[]> 
     .ilike('username', `%${query}%`)
     .limit(10);
 
-  return data ?? [];
+  return (data ?? []).map((u) => ({ ...u, monthBeers: 0 }));
 }
 
 // Envoyer une demande d'ami
@@ -108,11 +109,38 @@ export async function getFriends(userId: string): Promise<FriendProfile[]> {
 
   // Dédupliquer
   const seen = new Set<string>();
-  return friends.filter((f) => {
+  const deduped = friends.filter((f) => {
     if (seen.has(f.id)) return false;
     seen.add(f.id);
     return true;
   });
+
+  // Compteur de bières du mois en cours (1 seule requête batchée)
+  const friendIds = deduped.map((f) => f.id);
+  const monthCounts = new Map<string, number>();
+
+  if (friendIds.length > 0) {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).toISOString();
+
+    const { data: logs, error } = await supabase
+      .from('beer_logs')
+      .select('user_id')
+      .in('user_id', friendIds)
+      .gte('created_at', monthStart);
+
+    // Fail-soft : si erreur, on laisse tout le monde à 0
+    if (!error && logs) {
+      for (const row of logs as { user_id: string }[]) {
+        monthCounts.set(row.user_id, (monthCounts.get(row.user_id) ?? 0) + 1);
+      }
+    }
+  }
+
+  return deduped.map((f) => ({
+    ...f,
+    monthBeers: monthCounts.get(f.id) ?? 0,
+  }));
 }
 
 // Récupérer les demandes en attente (reçues)
